@@ -1156,33 +1156,39 @@ public class MenuBuilder {
             // 저장된 URL을 기본값으로 표시
             String input = (String) JOptionPane.showInputDialog(
                 host.getOwnerComponent(),
-                "<html><b>IP Webcam 스트림 주소 입력</b><br><br>"
-                + "Android에 <b>IP Webcam</b> 앱 설치 후 서버 시작하면<br>"
-                + "화면에 주소가 표시됩니다. /video 를 끝에 붙이세요.<br><br>"
-                + "예: http://192.168.0.5:8080/video</html>",
-                "스마트폰 카메라",
+                "<html>1. 스마트폰에서 <b>■ IP Webcam ■</b> 앱을 실행하시라요<br><br>"
+                + "2. 그 앱 화면을 밑으로 ■끝까지 스크롤■ 하시라요<br><br>"
+				+ "3. 거기 맨 아래의  ■서버 시작■을 누르시라요<br><br>"
+                + "4. 그 화면에 표시되는 주소를 여기에 입력하시라요.<br><br>"
+                + "예: http://192.168.0.70:8080</html>",
+                "스마트폰 카메라 주소 입력",
                 JOptionPane.PLAIN_MESSAGE,
 			null, null, host.getCameraUrl());
             if (input == null || input.trim().isEmpty()) return;
             String url = input.trim();
-            if (!url.contains("/video") && !url.contains("/mjpeg"))
-			url = url.replaceAll("/+$", "") + "/video";
+            // if (!url.contains("/video") && !url.contains("/mjpeg"))
+            if (!url.contains("/mjpeg"))
+			url = url.replaceAll("/+$", "");
+		
             host.setCameraUrl(url);   // INI에 저장
             host.stopSlideTimer();
             host.stopItsCctv();
             host.stopYoutube();
+			/*
             host.setGalaxyMode(false);
             host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false);
             host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
             host.setSparkleMode(false); host.setBubbleMode(false);
             host.setBgColor(null);
             host.setBgImage("", null);  // bgImage 미해제 버그 수정
+			*/
             host.setCameraMode(true);
             host.startCamera(url);
             host.repaintClock();
             // 연결 시작 → 이미지저장/중지 활성화
             camCapture.setEnabled(true);
             camStop   .setEnabled(true);
+			
 		});
 
         camCapture.addActionListener(e -> {
@@ -1196,8 +1202,8 @@ public class MenuBuilder {
 
         camStop.addActionListener(e -> {
             host.stopCamera();
-            host.setBgColor(null);
-            host.repaintClock();
+            // host.setBgColor(null);
+            // host.repaintClock();
             // 중지 후 비활성화
             camCapture.setEnabled(false);
             camStop   .setEnabled(false);
@@ -2224,6 +2230,7 @@ public class MenuBuilder {
         @Override public void    startCamera(String url)  { app.startCamera(url); }
         @Override public void    stopCamera()             { app.stopCamera(); }
         @Override public void    captureCamera()          { app.captureCamera(); }
+        // @Override public String  getCameraUrl()           { return app.config.getProperty("camera.url", app.cameraUrl); }
         @Override public String  getCameraUrl()           { return app.cameraUrl; }
         @Override public void    setCameraUrl(String url) { app.cameraUrl = url; }
 

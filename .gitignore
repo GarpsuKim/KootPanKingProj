@@ -1,0 +1,10 @@
+*.class
+*.log
+*.jsa
+*.exe
+*.txt
+INI_bak/
+Class/
+log/
+ERROR_OF_COMPILE/
+img/

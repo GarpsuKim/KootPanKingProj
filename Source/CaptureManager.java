@@ -274,7 +274,7 @@ public class CaptureManager {
 
         private void connectAndRead(String streamUrl) throws Exception {
             @SuppressWarnings("deprecation")
-            URL url = new URL(streamUrl);
+            URL url = new URL(streamUrl + "/video");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(8000);
             conn.setReadTimeout(10000);
