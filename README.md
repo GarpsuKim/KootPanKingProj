@@ -64,9 +64,6 @@ STEP 3 — Windows Defender가 삭제/격리한 경우
 _ReleaseBLD_All.bat
 ```
 
-
-# 사전 조건: JDK 17 이상 설치   / 저장소 클론 후: ReleaseBLD_All.bat
-
 빌드 결과물은 dist\KootPanKing\KootPanKing.exe 에 생성됩니다.
 
 📬 문의
