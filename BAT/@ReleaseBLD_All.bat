@@ -34,7 +34,7 @@ echo.
 echo 컴파일 중...
 
 CD "%SOURCE_DIR%"
-DEL  ddDIR.TXT
+if exist ddDIR.TXT  DEL  ddDIR.TXT
 type nul > ddDIR.TXT
 dir /b "*.java"  >>  ddDIR.TXT
 
@@ -50,7 +50,7 @@ if errorlevel 1 (
     pause & exit /b 1
 )
 echo     완료
-
+if exist ddDIR.TXT  DEL  ddDIR.TXT
 
 CD %ROOT_DIR%
 

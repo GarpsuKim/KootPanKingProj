@@ -8,3 +8,6 @@ Class/
 log/
 ERROR_OF_COMPILE/
 img/
+build/
+dist/
+input_dir/
