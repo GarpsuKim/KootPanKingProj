@@ -20,7 +20,7 @@ set "LIB_PATH=%ROOT_DIR%\Lib"
 set "CompileError_PATH=%ROOT_DIR%\ERROR_OF_COMPILE"
 set "CLASS_PATH=%ROOT_DIR%\Class"
 set ERROR_FILE=%CompileError_PATH%\ERROR_%CLASS_NAME%.txt
-set OUT=%CLASS_PATH%
+set "OUT=%CLASS_PATH%"
 
 echo SOURCE: %SOURCE_FILE%
 
@@ -32,8 +32,6 @@ javac -d %OUT%  -Xlint:deprecation ^
   -sourcepath "%SOURCE_DIR%" ^
   "%SOURCE_FILE%" 2> "%ERROR_FILE%"
   
-pause
-
 if %errorlevel% neq 0 (
     echo [ERROR] COMPILE ERROR
     echo ==========================================

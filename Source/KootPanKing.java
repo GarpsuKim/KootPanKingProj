@@ -1510,7 +1510,7 @@ public class KootPanKing extends JFrame {
 	}
 	
 	void startYoutube(String ytUrl) {
-        if (isChild) return;  // 자식 인스턴스는 외부 통신 불가
+        // if (isChild) return;  // 자식 인스턴스는 외부 통신 불가
         // URL 이 바뀐 경우 기존 스트림 완전 중단 후 재시작
         if (youtubeRunning && !ytUrl.equals(youtubeUrl)) {
             System.out.println("[Stream] URL 변경 → 기존 스트림 중단");
@@ -2555,26 +2555,27 @@ public class KootPanKing extends JFrame {
 	
     /** 30초 카운트다운 Close 확인 후 disposeInstance 호출 */
     void confirmClose() {
-        JLabel msgLabel = new JLabel("이 시계 창을 닫으시겠습니까?");
+        String cityLabel = (isChild && cityName != null && !cityName.isEmpty()) ? " [" + cityName + "]" : "";
+        JLabel msgLabel = new JLabel("이 시계 창을 닫으시겠습니까?" + cityLabel);
         msgLabel.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
         msgLabel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-		
+
         JPanel msgPanel = new JPanel(new BorderLayout());
         msgPanel.add(new JLabel(UIManager.getIcon("OptionPane.questionIcon")), BorderLayout.WEST);
         msgPanel.add(msgLabel, BorderLayout.CENTER);
-		
+
         JButton yesBtn = new JButton("Yes");
         JButton noBtn  = new JButton("No");
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         btnPanel.add(yesBtn);
         btnPanel.add(noBtn);
-		
+
         JPanel root = new JPanel(new BorderLayout(0, 8));
         root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         root.add(msgPanel, BorderLayout.CENTER);
         root.add(btnPanel, BorderLayout.SOUTH);
-		
-        JDialog dlg = new JDialog((Frame) null, "Close 확인", true);
+
+        JDialog dlg = new JDialog((Frame) null, "Close 확인" + cityLabel, true);
         dlg.setContentPane(root);
         dlg.pack();
         dlg.setLocationRelativeTo(null);
@@ -2585,7 +2586,7 @@ public class KootPanKing extends JFrame {
         javax.swing.Timer countdown = new javax.swing.Timer(1000, null);
         countdown.addActionListener(e -> {
             sec[0]--;
-            dlg.setTitle("Close 확인  — " + sec[0] + "초 후 취소");
+            dlg.setTitle("Close 확인" + cityLabel + "  — " + sec[0] + "초 후 취소");
             if (sec[0] <= 0) { countdown.stop(); dlg.dispose(); }
 		});
         countdown.start();
