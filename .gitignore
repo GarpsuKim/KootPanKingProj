@@ -4,6 +4,8 @@
 *.exe
 *.txt
 *.ini
+*.lock
+*.java.*
 INI_bak/
 Class/
 log/

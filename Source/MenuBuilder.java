@@ -959,27 +959,21 @@ public class MenuBuilder {
         ytMenu.add(statusItem);
         ytMenu.add(new JSeparator());
 
-        // ── youTubeCctv.ini 목록 — 재생 중일 때만 로드 (중지됨이면 GitHub 폴링 안 함) ──
-        if (host.isYoutubeMode()) {
-            java.util.List<String[]> iniList = loadStreamIni();
-            if (iniList.isEmpty()) {
-                JMenuItem emptyItem = new JMenuItem("(목록 없음 - youTubeCctv.ini 확인)");
-                emptyItem.setEnabled(false);
-                ytMenu.add(emptyItem);
-				} else {
-                for (String[] entry : iniList) {
-                    String label = entry[0];
-                    String url   = entry[1];
-                    JMenuItem item = new JMenuItem(label);
-                    item.addActionListener(ev -> startStream(url));
-                    ytMenu.add(item);
-				}
-			}
-			} else {
-            JMenuItem emptyItem = new JMenuItem("(중지됨 — URL 직접 입력으로 시작)");
+        // ── youTubeCctv.ini 목록 ─────────────────────────────────
+        java.util.List<String[]> iniList = loadStreamIni();
+        if (iniList.isEmpty()) {
+            JMenuItem emptyItem = new JMenuItem("(목록 없음 - youTubeCctv.ini 확인)");
             emptyItem.setEnabled(false);
             ytMenu.add(emptyItem);
-		}
+        } else {
+            for (String[] entry : iniList) {
+                String label = entry[0];
+                String url   = entry[1];
+                JMenuItem item = new JMenuItem(label);
+                item.addActionListener(ev -> startStream(url));
+                ytMenu.add(item);
+            }
+        }
         ytMenu.add(new JSeparator());
 
         // ── URL 직접 입력 ─────────────────────────────────────────
@@ -1508,25 +1502,79 @@ public class MenuBuilder {
             ItsCctvManager mgr = host.getItsCctv();
             String cur = mgr.getApiKey();
 
-            // JTextField 에 기존 키를 초기값으로 직접 설정
             JTextField keyField = new JTextField(cur, 36);
-            Object[] msg = {
+
+            // ── 서버에서 키 값 수신 버튼 ─────────────────────────
+            JButton fetchBtn = new JButton("🌐 서버에서 키 값 수신");
+            fetchBtn.addActionListener(ev -> {
+                fetchBtn.setEnabled(false);
+                fetchBtn.setText("⏳ 수신 중...");
+                new Thread(() -> {
+                    try {
+                        java.net.URL dlUrl = java.net.URI.create(
+                            "https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/INI_bak/ITS_API_KEY.txt"
+                        ).toURL();
+                        try (java.io.BufferedReader br = new java.io.BufferedReader(
+                                new java.io.InputStreamReader(dlUrl.openStream()))) {
+                            String line = br.readLine();
+                            if (line != null) {
+                                String key = line.trim();
+                                SwingUtilities.invokeLater(() -> keyField.setText(key));
+                            }
+                        }
+                        SwingUtilities.invokeLater(() -> {
+                            fetchBtn.setText("✅ 수신 완료");
+                        });
+                    } catch (Exception ex) {
+                        SwingUtilities.invokeLater(() -> {
+                            fetchBtn.setText("❌ 수신 실패");
+                            fetchBtn.setEnabled(true);
+                        });
+                    }
+                }, "ItsKeyFetch").start();
+            });
+
+            // ── JDialog 직접 구성 ─────────────────────────────────
+            java.awt.Window owner = host.getOwnerComponent() instanceof java.awt.Window
+                ? (java.awt.Window) host.getOwnerComponent()
+                : SwingUtilities.getWindowAncestor(host.getOwnerComponent());
+            JDialog dlg = new JDialog(owner, "ITS API 키 설정", java.awt.Dialog.ModalityType.APPLICATION_MODAL);
+
+            JLabel label = new JLabel(
                 "<html><b>ITS 국가교통정보센터 API 키 입력</b><br><br>"
                 + "발급처: <b>https://www.its.go.kr</b><br>"
                 + "회원가입 → 오픈데이터 → CCTV 화상자료 → 인증키 신청<br><br>"
-                + "현재 키: " + (cur.isEmpty() ? "(없음)" : cur.substring(0, Math.min(8, cur.length())) + "...") + "</html>",
-                keyField
-			};
-            int result = JOptionPane.showConfirmDialog(
-                host.getOwnerComponent(), msg, "ITS API 키 설정",
-			JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-            if (result != JOptionPane.OK_OPTION) return;
+                + "현재 키: " + (cur.isEmpty() ? "(없음)" : cur.substring(0, Math.min(8, cur.length())) + "...") + "</html>");
+
+            JButton okBtn     = new JButton("확인");
+            JButton cancelBtn = new JButton("취소");
+            JPanel btnPanel   = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT));
+            btnPanel.add(okBtn);
+            btnPanel.add(cancelBtn);
+
+            JPanel center = new JPanel(new java.awt.BorderLayout(0, 6));
+            center.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 10, 4, 10));
+            center.add(label,    java.awt.BorderLayout.NORTH);
+            center.add(keyField, java.awt.BorderLayout.CENTER);
+            center.add(fetchBtn, java.awt.BorderLayout.SOUTH);
+
+            dlg.getContentPane().add(center,   java.awt.BorderLayout.CENTER);
+            dlg.getContentPane().add(btnPanel, java.awt.BorderLayout.SOUTH);
+            dlg.pack();
+            dlg.setLocationRelativeTo(owner);
+
+            final boolean[] confirmed = {false};
+            okBtn.addActionListener(ev2 -> { confirmed[0] = true;  dlg.dispose(); });
+            cancelBtn.addActionListener(ev2 -> dlg.dispose());
+            dlg.setVisible(true);
+
+            if (!confirmed[0]) return;
             String input = keyField.getText().trim();
             mgr.setApiKey(input);
             host.saveConfig();
             JOptionPane.showMessageDialog(host.getOwnerComponent(),
-			"API 키가 저장되었습니다.", "ITS CCTV", JOptionPane.INFORMATION_MESSAGE);
-		});
+                "API 키가 저장되었습니다.", "ITS CCTV", JOptionPane.INFORMATION_MESSAGE);
+        });
         cctvMenu.add(keyItem);
         cctvMenu.addSeparator();
 

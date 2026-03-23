@@ -31,6 +31,8 @@ javac -d %OUT%  -Xlint:deprecation ^
   -encoding UTF-8 ^
   -sourcepath "%SOURCE_DIR%" ^
   "%SOURCE_FILE%" 2> "%ERROR_FILE%"
+  
+pause
 
 if %errorlevel% neq 0 (
     echo [ERROR] COMPILE ERROR
