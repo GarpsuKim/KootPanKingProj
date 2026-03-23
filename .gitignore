@@ -3,6 +3,7 @@
 *.jsa
 *.exe
 *.txt
+*.ini
 INI_bak/
 Class/
 log/

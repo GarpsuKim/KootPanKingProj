@@ -4,20 +4,17 @@ import java.awt.*;
 import java.awt.event.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+
 /**
 	* KootPanKing 의 팝업 메뉴 생성 로직을 분리한 클래스.
 	* KootPanKing 인스턴스를 HostContext 인터페이스로 주입받아
 	* 부모 클래스에 대한 직접 의존 없이 JPopupMenu 를 빌드한다.
 */
 public class MenuBuilder {
-
-	private JMenu systemMenu =  new JMenu("시스템...");
-    private JPopupMenu menu = new JPopupMenu();
-
     private static final String mainTitle = "끝판왕 (v1.00)  [Alt-K]";
     // ── 호스트(KootPanKing)가 제공해야 하는 콜백 인터페이스 ──
     public interface HostContext {
-		// ── 상태 읽기 ─────────────────────────────────────────────
+        // ── 상태 읽기 ─────────────────────────────────────────────
         boolean  isAlwaysOnTop();
         boolean  isShowDigital();
         boolean  isShowNumbers();
@@ -200,6 +197,7 @@ public class MenuBuilder {
     //  build() : 팝업 메뉴를 새로 만들어 반환
     // ═══════════════════════════════════════════════════════════
     public JPopupMenu build() {
+        JPopupMenu menu = new JPopupMenu();
 
         // ── Title ──────────────────────────────────────────────
         // JMenuItem titleMenu = new JMenuItem(mainTitle);
@@ -341,10 +339,48 @@ public class MenuBuilder {
             if (c != null) { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(c); host.saveConfig(); host.repaintClock(); }
 		});
         JMenuItem bgImageItem = new JMenuItem("이미지 파일 선택...");
-        bgImageItem.addActionListener(e -> {readImageFiles();});
-
-
-		JMenuItem bgReset = new JMenuItem("배경색 초기화 (Marble)");
+        bgImageItem.addActionListener(e -> {
+            // JFileChooser 생성자가 지정 경로를 동기 탐색하여 EDT를 블로킹함.
+            // 백그라운드 스레드에서 생성 후 준비되면 EDT에서 다이얼로그 표시.
+            final String prev = host.getBgImagePath();
+            new Thread(() -> {
+                // ① 백그라운드: 생성자 블로킹 구간
+                final String initPath = (prev != null && !prev.isEmpty())
+				? new java.io.File(prev).getParent()
+				: System.getProperty("user.home");
+                final JFileChooser fc = new JFileChooser(initPath);
+                fc.setDialogTitle("배경 이미지 선택");
+                fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+				"이미지 파일 (jpg, jpeg, png, bmp, gif)", "jpg", "jpeg", "png", "bmp", "gif"));
+                // ② EDT: 다이얼로그 표시
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    if (fc.showOpenDialog(host.getOwnerComponent()) != JFileChooser.APPROVE_OPTION) return;
+                    final java.io.File f = fc.getSelectedFile();
+                    // ③ 백그라운드: 이미지 읽기 (ImageIO.read 도 EDT 블로킹 원인)
+                    new Thread(() -> {
+                        try {
+                            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
+                            if (img == null) throw new Exception("이미지를 읽을 수 없습니다.");
+                            javax.swing.SwingUtilities.invokeLater(() -> {
+                                host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube();
+                                host.setGalaxyMode(false); host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false);
+                                host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
+                                host.setSparkleMode(false); host.setBubbleMode(false);
+                                host.setBgColor(null);
+                                host.setBgImage(f.getAbsolutePath(), img);
+                                host.saveConfig();
+                                host.repaintClock();
+							});
+							} catch (Exception ex) {
+                            javax.swing.SwingUtilities.invokeLater(() ->
+                                JOptionPane.showMessageDialog(host.getOwnerComponent(),
+								"이미지 로드 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE));
+						}
+					}, "BgImageLoader").start();
+				});
+			}, "BgImageChooserInit").start();
+		});
+        JMenuItem bgReset = new JMenuItem("배경색 초기화 (Marble)");
         bgReset.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JMenuItem bgGalaxy = new JMenuItem("Galaxy");
         bgGalaxy.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setBgImage("", null); host.setGalaxyMode(true); host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
@@ -404,6 +440,7 @@ public class MenuBuilder {
 		bgMenu.add(showMenu);     // 12
         if (!host.isChild()) {
             bgMenu.add(new javax.swing.JSeparator());
+            bgMenu.add(buildYoutubeMenuItem());
             JMenuItem speedGuide = new JMenuItem("⚡ 크기 및 속도 조절");        speedGuide.addActionListener(e -> JOptionPane.showMessageDialog(
                 host.getOwnerComponent(),
                 "시계 크기와 Galaxy/Matrix의 이동 속도를 조절 할 수 있습니다.\n\n" +
@@ -415,6 +452,7 @@ public class MenuBuilder {
 			"크기와 이동 속도 조절", JOptionPane.INFORMATION_MESSAGE));
             bgMenu.add(speedGuide);
             // bgMenu.add(buildCameraMenuItem());
+            bgMenu.add(buildItsCctvMenuItem());
 		}
         menu.add(bgMenu);
 
@@ -454,8 +492,39 @@ public class MenuBuilder {
         tickMenu.add(tickReset);
         menu.add(tickMenu);
 
-        JMenu handMenu = buildHandMenu();
+        // ── 바늘 조정 ───────────────────────────────────────────
+        JCheckBoxMenuItem secondVisibleItem = new JCheckBoxMenuItem("초침 보이기", host.isSecondVisible());
+        secondVisibleItem.addActionListener(e -> {
+            host.setSecondVisible(secondVisibleItem.isSelected());
+            host.repaintClock();
+		});
+
+        JMenuItem hourColorItem = new JMenuItem("시침 색깔 변경...");
+        hourColorItem.addActionListener(e -> {
+            Color c = JColorChooser.showDialog(host.getOwnerComponent(), "시침 색상", host.getHourColor());
+            if (c != null) { host.setHourColor(c); host.repaintClock(); }
+		});
+
+        JMenuItem minuteColorItem = new JMenuItem("분침 색깔 변경...");
+        minuteColorItem.addActionListener(e -> {
+            Color c = JColorChooser.showDialog(host.getOwnerComponent(), "분침 색상", host.getMinuteColor());
+            if (c != null) { host.setMinuteColor(c); host.repaintClock(); }
+		});
+
+        JMenuItem secondColorItem = new JMenuItem("초침 색깔 변경...");
+        secondColorItem.addActionListener(e -> {
+            Color c = JColorChooser.showDialog(host.getOwnerComponent(), "초침 색상", host.getSecondColor());
+            if (c != null) { host.setSecondColor(c); host.repaintClock(); }
+		});
+
+        JMenu handMenu = new JMenu("바늘 조정");
+        handMenu.add(secondVisibleItem);
+        handMenu.addSeparator();
+        handMenu.add(secondColorItem);
+        handMenu.add(minuteColorItem);
+        handMenu.add(hourColorItem);
         menu.add(handMenu);
+
 
         JMenu fontMenu = new JMenu("1...12 폰트");
         String[] fonts = {"Georgia", "Times New Roman", "Arial", "Tahoma", "Verdana",
@@ -485,6 +554,7 @@ public class MenuBuilder {
             fontSizeMenu.add(si);
 		}
         fontMenu.add(fontSizeMenu);
+
         JMenuItem numColorItem = new JMenuItem("숫자 Color...");
         numColorItem.addActionListener(e -> {
             Color def = host.getTheme().equals("Black") ? Color.WHITE : Color.BLACK;
@@ -505,8 +575,7 @@ public class MenuBuilder {
 		});
         fontMenu.add(showNumbersItem);
         menu.add(fontMenu);
-		menu.addSeparator();
-		// ── Animation ──────────────────────────────────────────
+        // ── Animation ──────────────────────────────────────────
         JMenu animMenu = new JMenu("Animation");
         for (int v : host.getIntervals()) {
             JCheckBoxMenuItem ai = new JCheckBoxMenuItem(v == 0 ? "0 (중단)" : String.valueOf(v));
@@ -516,311 +585,229 @@ public class MenuBuilder {
             animMenu.add(ai);
 		}
         menu.add(animMenu);
-		// .....
-        if (!host.isChild()) {
-			menu.add(buildCameraMenuItem());
-		}
-        menu.add(buildItsCctvMenuItem());
-        menu.add(buildYoutubeMenuItem());
+        menu.add(buildCameraMenuItem());
 		menu.addSeparator();
         // ── 차임벨 / 알람 / Gmail / 카카오 / 텔레그램 (부모 전용) ──
         if (!host.isChild()) {
-			buildAccessoryMenu();
-		}
-        menu.addSeparator();
-		buildSystemMenu();
-        return menu;
-	}      //  *****************************   public JPopupMenu build() {
-
-	private JMenu buildHandMenu() {
-		// ── 바늘 조정 ───────────────────────────────────────────
-        JCheckBoxMenuItem secondVisibleItem = new JCheckBoxMenuItem("초침 보이기", host.isSecondVisible());
-        secondVisibleItem.addActionListener(e -> {
-            host.setSecondVisible(secondVisibleItem.isSelected());
-            host.repaintClock();
-		});
-		JMenuItem hourColorItem = new JMenuItem("시침 색깔 변경...");
-        hourColorItem.addActionListener(e -> {
-            Color c = JColorChooser.showDialog(host.getOwnerComponent(), "시침 색상", host.getHourColor());
-            if (c != null) { host.setHourColor(c); host.repaintClock(); }
-		});
-        JMenuItem minuteColorItem = new JMenuItem("분침 색깔 변경...");
-        minuteColorItem.addActionListener(e -> {
-            Color c = JColorChooser.showDialog(host.getOwnerComponent(), "분침 색상", host.getMinuteColor());
-            if (c != null) { host.setMinuteColor(c); host.repaintClock(); }
-		});
-        JMenuItem secondColorItem = new JMenuItem("초침 색깔 변경...");
-        secondColorItem.addActionListener(e -> {
-            Color c = JColorChooser.showDialog(host.getOwnerComponent(), "초침 색상", host.getSecondColor());
-            if (c != null) { host.setSecondColor(c); host.repaintClock(); }
-		});
-        JMenu handMenu = new JMenu("바늘 조정");
-        handMenu.add(secondVisibleItem);
-        handMenu.addSeparator();
-        handMenu.add(secondColorItem);
-        handMenu.add(minuteColorItem);
-        handMenu.add(hourColorItem);
-		return handMenu;
-	}
-
-	private void readImageFiles() {
-		// JFileChooser 생성자가 지정 경로를 동기 탐색하여 EDT를 블로킹함.
-		// 백그라운드 스레드에서 생성 후 준비되면 EDT에서 다이얼로그 표시.
-		final String prev = host.getBgImagePath();
-		new Thread(() -> {
-			// ① 백그라운드: 생성자 블로킹 구간
-			final String initPath = (prev != null && !prev.isEmpty())
-			? new java.io.File(prev).getParent()
-			: System.getProperty("user.home");
-			final JFileChooser fc = new JFileChooser(initPath);
-			fc.setDialogTitle("배경 이미지 선택");
-			fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
-			"이미지 파일 (jpg, jpeg, png, bmp, gif)", "jpg", "jpeg", "png", "bmp", "gif"));
-			// ② EDT: 다이얼로그 표시
-			javax.swing.SwingUtilities.invokeLater(() -> {
-				if (fc.showOpenDialog(host.getOwnerComponent()) != JFileChooser.APPROVE_OPTION) return;
-				final java.io.File f = fc.getSelectedFile();
-				// ③ 백그라운드: 이미지 읽기 (ImageIO.read 도 EDT 블로킹 원인)
-				new Thread(() -> {
-					try {
-						java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
-						if (img == null) throw new Exception("이미지를 읽을 수 없습니다.");
-						javax.swing.SwingUtilities.invokeLater(() -> {
-							host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube();
-							host.setGalaxyMode(false); host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false);
-							host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
-							host.setSparkleMode(false); host.setBubbleMode(false);
-							host.setBgColor(null);
-							host.setBgImage(f.getAbsolutePath(), img);
-							host.saveConfig();
-							host.repaintClock();
-						});
-						} catch (Exception ex) {
-						javax.swing.SwingUtilities.invokeLater(() ->
-							JOptionPane.showMessageDialog(host.getOwnerComponent(),
-							"이미지 로드 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE));
-					}
-				}, "BgImageLoader").start();
-			});
-		}, "BgImageChooserInit").start();
-	}
-
-	private void buildAccessoryMenu() {
-		// ── 차임벨 ─────────────────────────────────────────
-		JMenuItem chimeItem = new JMenuItem("차임벨 설정...");
-		chimeItem.addActionListener(e -> host.showChimeDialog());
-		// chimeItem.setEnabled(false); // [배포] 비활성화
-		menu.add(chimeItem);
-		// ── 알람 관리 ───────────────────────────────────────
-		JMenuItem alarmItem = new JMenuItem("알람 관리...");
-		alarmItem.addActionListener(e -> host.showAlarmDialog());
-		alarmItem.setEnabled(false); // [배포] 비활성화
-		menu.add(alarmItem);
-		// ── Gmail / Calendar ────────────────────────────────
-		JMenu gmailMenu = buildGmailCalendarMenu();
-		gmailMenu.setEnabled(false); // [배포] 비활성화
-		menu.add(gmailMenu);
-		// ── 카카오톡 ────────────────────────────────────────
-		JMenu kakaoMenu = buildKakaoMenu(new JMenu("카카오톡..."));
-		kakaoMenu.setEnabled(false); // [배포] 비활성화
-		menu.add(kakaoMenu);
-		// ── 텔레그램 ────────────────────────────────────────
-		JMenu telegramMenu = new JMenu("텔레그램");
-		JMenuItem telegramSendItem = new JMenuItem("✈️ 텔레그램 보내기...");
-		telegramSendItem.addActionListener(e -> host.showTelegramDialog());
-		telegramMenu.add(telegramSendItem);
-		JMenuItem telegramHelpItem = new JMenuItem("📖 텔레그램 설정 안내...");
-		telegramHelpItem.addActionListener(e -> {
-			try {
-				java.awt.Desktop.getDesktop().browse(
-				new java.net.URI("https://blog.naver.com/garpsu/224213397702"));
-				} catch (Exception ex) {
-				JOptionPane.showMessageDialog(host.getOwnerComponent(),
-				"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
-			}
-		});
-		telegramMenu.add(telegramHelpItem);
-		telegramMenu.setEnabled(false); // [배포] 비활성화
-		menu.add(telegramMenu);
-		// ── 생활도구 ────────────────────────────────────────────
-		JMenu lifeMenu = new JMenu("생활도구");
-		String[][] lifeLinks = {
-			{"🌏 생활천문관",  "https://astro.kasi.re.kr/index"},
-			{"🕐 TIME.IS",    "https://time.is"},
-			{"🕰 TIME&DATE",  "https://www.timeanddate.com/worldclock/full.html"},
-			{"🌤 날씨",        "https://www.weather.go.kr/w/index.do"},
-		};
-		for (String[] entry : lifeLinks) {
-			JMenuItem li = new JMenuItem(entry[0]);
-			final String url = entry[1];
-			li.addActionListener(e -> {
-				try {
-					java.awt.Desktop.getDesktop().browse(new java.net.URI(url));
+            // ── 차임벨 ─────────────────────────────────────────
+            JMenuItem chimeItem = new JMenuItem("차임벨 설정...");
+            chimeItem.addActionListener(e -> host.showChimeDialog());
+            // chimeItem.setEnabled(false); // [배포] 비활성화
+            menu.add(chimeItem);
+            // ── 알람 관리 ───────────────────────────────────────
+            JMenuItem alarmItem = new JMenuItem("알람 관리...");
+            alarmItem.addActionListener(e -> host.showAlarmDialog());
+            alarmItem.setEnabled(false); // [배포] 비활성화
+            menu.add(alarmItem);
+            // ── Gmail / Calendar ────────────────────────────────
+            JMenu gmailMenu = buildGmailCalendarMenu();
+            gmailMenu.setEnabled(false); // [배포] 비활성화
+            menu.add(gmailMenu);
+            // ── 카카오톡 ────────────────────────────────────────
+            JMenu kakaoMenu = buildKakaoMenu(new JMenu("카카오톡..."));
+            kakaoMenu.setEnabled(false); // [배포] 비활성화
+            menu.add(kakaoMenu);
+            // ── 텔레그램 ────────────────────────────────────────
+            JMenu telegramMenu = new JMenu("텔레그램");
+            JMenuItem telegramSendItem = new JMenuItem("✈️ 텔레그램 보내기...");
+            telegramSendItem.addActionListener(e -> host.showTelegramDialog());
+            telegramMenu.add(telegramSendItem);
+            JMenuItem telegramHelpItem = new JMenuItem("📖 텔레그램 설정 안내...");
+            telegramHelpItem.addActionListener(e -> {
+                try {
+                    java.awt.Desktop.getDesktop().browse(
+					new java.net.URI("https://blog.naver.com/garpsu/224213397702"));
 					} catch (Exception ex) {
-					JOptionPane.showMessageDialog(host.getOwnerComponent(),
+                    JOptionPane.showMessageDialog(host.getOwnerComponent(),
 					"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 				}
 			});
-			lifeMenu.add(li);
+            telegramMenu.add(telegramHelpItem);
+            telegramMenu.setEnabled(false); // [배포] 비활성화
+            menu.add(telegramMenu);
+			// ── 생활도구 ────────────────────────────────────────────
+			JMenu lifeMenu = new JMenu("생활도구");
+			String[][] lifeLinks = {
+				{"🌏 생활천문관",  "https://astro.kasi.re.kr/index"},
+				{"🕐 TIME.IS",    "https://time.is"},
+				{"🕰 TIME&DATE",  "https://www.timeanddate.com/worldclock/full.html"},
+				{"🌤 날씨",        "https://www.weather.go.kr/w/index.do"},
+			};
+			for (String[] entry : lifeLinks) {
+				JMenuItem li = new JMenuItem(entry[0]);
+				final String url = entry[1];
+				li.addActionListener(e -> {
+					try {
+						java.awt.Desktop.getDesktop().browse(new java.net.URI(url));
+						} catch (Exception ex) {
+						JOptionPane.showMessageDialog(host.getOwnerComponent(),
+						"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
+					}
+				});
+				lifeMenu.add(li);
+			}
+			lifeMenu.addSeparator();
+			// ── 만년달력 ───────────────────────────────────────
+			JMenuItem calendarItem = new JMenuItem("📅 만년달력");
+			calendarItem.addActionListener(e -> openCalendarHtml(host.getOwnerComponent()));
+			lifeMenu.add(calendarItem);
+			// ── 만년달력 갱신 ──────────────────────────────────
+			JMenuItem calendarUpdateItem = new JMenuItem("🔄 만년달력 갱신");
+			calendarUpdateItem.addActionListener(e -> updateCalendarHtml(host.getOwnerComponent()));
+			lifeMenu.add(calendarUpdateItem);
+			// lifeMenu 활성화 (배포)
+			menu.add(lifeMenu);
 		}
-		lifeMenu.addSeparator();
-		// ── 만년달력 ───────────────────────────────────────
-		JMenuItem calendarItem = new JMenuItem("📅 만년달력");
-		calendarItem.addActionListener(e -> openCalendarHtml(host.getOwnerComponent()));
-		lifeMenu.add(calendarItem);
-		// ── 만년달력 갱신 ──────────────────────────────────
-		JMenuItem calendarUpdateItem = new JMenuItem("🔄 만년달력 갱신");
-		calendarUpdateItem.addActionListener(e -> updateCalendarHtml(host.getOwnerComponent()));
-		lifeMenu.add(calendarUpdateItem);
-		// lifeMenu 활성화 (배포)
-		menu.add(lifeMenu);
-	}
-
-	private void buildSystemMenu() {
-		// ── Close / Restart / EXIT ─────────────────────────────
+        menu.addSeparator();
+        // ── Close / Restart / EXIT ─────────────────────────────
         // 1번: [시스템] 서브메뉴로 이동
-        // systemMenu = new JMenu("시스템...");
+        JMenu systemMenu = new JMenu("시스템...");
         // 2번: About
         JMenuItem aboutItem = new JMenuItem("About");
         aboutItem.addActionListener(e -> host.showAbout());
         systemMenu.add(aboutItem);
         // 4번: Log - 로그 파일을 기본 브라우저로 표시
         JMenuItem logItem = new JMenuItem("Log...");
-        logItem.addActionListener(e -> {showLog();});
+        logItem.addActionListener(e -> {
+            String logPath = host.getLogFilePath();
+            if (logPath == null || logPath.isEmpty()) {
+                JOptionPane.showMessageDialog(host.getOwnerComponent(),
+				"로그 파일 경로를 찾을 수 없습니다.", "Log", JOptionPane.WARNING_MESSAGE);
+                return;
+			}
+            java.io.File logFile = new java.io.File(logPath);
+            if (!logFile.exists()) {
+                JOptionPane.showMessageDialog(host.getOwnerComponent(),
+				"로그 파일이 존재하지 않습니다.\n" + logPath, "Log", JOptionPane.WARNING_MESSAGE);
+                return;
+			}
+            try {
+                String logText;
+                try (java.io.BufferedReader br = new java.io.BufferedReader(
+					new java.io.InputStreamReader(
+					new java.io.FileInputStream(logFile), "UTF-8"))) {
+                    StringBuilder sbLog = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) sbLog.append(line).append("\n");
+                    logText = sbLog.toString();
+				}
+                String escaped = logText
+				.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+                java.io.File htmlFile = java.io.File.createTempFile("applog_", ".html");
+                htmlFile.deleteOnExit();
+                try (java.io.PrintWriter pw = new java.io.PrintWriter(
+					new java.io.OutputStreamWriter(
+					new java.io.FileOutputStream(htmlFile), "UTF-8"))) {
+                    pw.println("<!DOCTYPE html><html><head>");
+                    pw.println("<meta charset='UTF-8'>");
+                    pw.println("<title>끝판왕 로그</title>");
+                    pw.println("<style>");
+                    pw.println("body { font-family: 'Consolas','Malgun Gothic',monospace;");
+                    pw.println("       background:#0d0d0d; color:#c8ffc8;");
+                    pw.println("       padding:20px; line-height:1.6; }");
+                    pw.println("pre  { white-space:pre-wrap; font-size:13px; }");
+                    pw.println("</style></head><body><pre>");
+                    pw.println(escaped);
+                    pw.println("</pre></body></html>");
+				}
+                java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
+				} catch (Exception ex) {
+                JOptionPane.showMessageDialog(host.getOwnerComponent(),
+				"로그 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
+			}
+		});
         systemMenu.add(logItem);
 
         // 기본설정파일 - ini 파일을 브라우저로 표시
         JMenuItem iniItem = new JMenuItem("⚙️ 기본설정파일...");
-        iniItem.addActionListener(e -> {showIni();});
+        iniItem.addActionListener(e -> {
+            String iniPath = host.getConfigFilePath();
+            java.io.File iniFile = new java.io.File(iniPath);
+            if (!iniFile.exists()) {
+                JOptionPane.showMessageDialog(host.getOwnerComponent(),
+				"설정 파일이 존재하지 않습니다.\n" + iniPath, "기본설정파일", JOptionPane.WARNING_MESSAGE);
+                return;
+			}
+            try {
+                String iniText;
+                try (java.io.BufferedReader br = new java.io.BufferedReader(
+					new java.io.InputStreamReader(
+					new java.io.FileInputStream(iniFile), "UTF-8"))) {
+                    StringBuilder sbIni = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) sbIni.append(line).append("\n");
+                    iniText = sbIni.toString();
+				}
+                String escaped = iniText
+				.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+                java.io.File htmlFile = java.io.File.createTempFile("appcfg_", ".html");
+                htmlFile.deleteOnExit();
+                try (java.io.PrintWriter pw = new java.io.PrintWriter(
+					new java.io.OutputStreamWriter(
+					new java.io.FileOutputStream(htmlFile), "UTF-8"))) {
+                    pw.println("<!DOCTYPE html><html><head>");
+                    pw.println("<meta charset='UTF-8'>");
+                    pw.println("<title>끝판왕 설정파일</title>");
+                    pw.println("<style>");
+                    pw.println("body { font-family: 'Consolas','Malgun Gothic',monospace;");
+                    pw.println("       background:#0d0d0d; color:#ffe066;");
+                    pw.println("       padding:20px; line-height:1.6; }");
+                    pw.println("pre  { white-space:pre-wrap; font-size:13px; }");
+                    pw.println("</style></head><body><pre>");
+                    pw.println(escaped);
+                    pw.println("</pre></body></html>");
+				}
+                java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
+				} catch (Exception ex) {
+                JOptionPane.showMessageDialog(host.getOwnerComponent(),
+				"설정 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
+			}
+		});
         systemMenu.add(iniItem);
+
         systemMenu.addSeparator();
+
         if (!host.isChild()) {
-			TrayMenuSetup(systemMenu);
+            // ── 트레이로 보내기 (부모 전용) ───────────────────
+            JMenuItem trayItem = new JMenuItem("🗕 트레이로 보내기");
+            trayItem.addActionListener(e -> host.sendToTray());
+            systemMenu.add(trayItem);
+
+            // ── PC 부팅 시 자동 실행 (부모 전용) ──────────────
+            boolean isAutoStart = host.checkAutoStart();
+            JCheckBoxMenuItem autoStartItem = new JCheckBoxMenuItem("🚀 PC 부팅 시 자동 실행", isAutoStart);
+            autoStartItem.addActionListener(e -> host.autoStartItemActionListener(autoStartItem));
+            systemMenu.add(autoStartItem);
+
+            systemMenu.addSeparator();
+
+            // ── MainWindow (부모 전용) ─────────────────────────
+            JMenuItem mainWindowItem = new JMenuItem("🖥 MainWindow");
+            mainWindowItem.addActionListener(e -> host.showMainWindow());
+            systemMenu.add(mainWindowItem);
+
+            systemMenu.addSeparator();
 		}
+
         JMenuItem closeItem = new JMenuItem("Close");
         closeItem.addActionListener(e -> host.confirmClose());
         systemMenu.add(closeItem);
+
         if (!host.isChild()) {
             JMenuItem restartItem = new JMenuItem("🔄 Restart");
             restartItem.addActionListener(e -> host.restartApp());
             systemMenu.add(restartItem);
+
             JMenuItem exitItem = new JMenuItem("EXIT");
             exitItem.addActionListener(e -> host.confirmAndExit());
             systemMenu.add(exitItem);
 		}
+
         menu.add(systemMenu);
+
+        return menu;
 	}
 
-	private void showLog() {
-		String logPath = host.getLogFilePath();
-		if (logPath == null || logPath.isEmpty()) {
-			JOptionPane.showMessageDialog(host.getOwnerComponent(),
-			"로그 파일 경로를 찾을 수 없습니다.", "Log", JOptionPane.WARNING_MESSAGE);
-			return;
-		}
-		java.io.File logFile = new java.io.File(logPath);
-		if (!logFile.exists()) {
-			JOptionPane.showMessageDialog(host.getOwnerComponent(),
-			"로그 파일이 존재하지 않습니다.\n" + logPath, "Log", JOptionPane.WARNING_MESSAGE);
-			return;
-		}
-		try {
-			String logText;
-			try (java.io.BufferedReader br = new java.io.BufferedReader(
-				new java.io.InputStreamReader(
-				new java.io.FileInputStream(logFile), "UTF-8"))) {
-				StringBuilder sbLog = new StringBuilder();
-				String line;
-				while ((line = br.readLine()) != null) sbLog.append(line).append("\n");
-				logText = sbLog.toString();
-			}
-			String escaped = logText
-			.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-			java.io.File htmlFile = java.io.File.createTempFile("applog_", ".html");
-			htmlFile.deleteOnExit();
-			try (java.io.PrintWriter pw = new java.io.PrintWriter(
-				new java.io.OutputStreamWriter(
-				new java.io.FileOutputStream(htmlFile), "UTF-8"))) {
-				pw.println("<!DOCTYPE html><html><head>");
-				pw.println("<meta charset='UTF-8'>");
-				pw.println("<title>끝판왕 로그</title>");
-				pw.println("<style>");
-				pw.println("body { font-family: 'Consolas','Malgun Gothic',monospace;");
-				pw.println("       background:#0d0d0d; color:#c8ffc8;");
-				pw.println("       padding:20px; line-height:1.6; }");
-				pw.println("pre  { white-space:pre-wrap; font-size:13px; }");
-				pw.println("</style></head><body><pre>");
-				pw.println(escaped);
-				pw.println("</pre></body></html>");
-			}
-			java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
-			} catch (Exception ex) {
-			JOptionPane.showMessageDialog(host.getOwnerComponent(),
-			"로그 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
-		}
-	}
-
-	private void showIni() {
-		String iniPath = host.getConfigFilePath();
-		java.io.File iniFile = new java.io.File(iniPath);
-		if (!iniFile.exists()) {
-			JOptionPane.showMessageDialog(host.getOwnerComponent(),
-			"설정 파일이 존재하지 않습니다.\n" + iniPath, "기본설정파일", JOptionPane.WARNING_MESSAGE);
-			return;
-		}
-		try {
-			String iniText;
-			try (java.io.BufferedReader br = new java.io.BufferedReader(
-				new java.io.InputStreamReader(
-				new java.io.FileInputStream(iniFile), "UTF-8"))) {
-				StringBuilder sbIni = new StringBuilder();
-				String line;
-				while ((line = br.readLine()) != null) sbIni.append(line).append("\n");
-				iniText = sbIni.toString();
-			}
-			String escaped = iniText
-			.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-			java.io.File htmlFile = java.io.File.createTempFile("appcfg_", ".html");
-			htmlFile.deleteOnExit();
-			try (java.io.PrintWriter pw = new java.io.PrintWriter(
-				new java.io.OutputStreamWriter(
-				new java.io.FileOutputStream(htmlFile), "UTF-8"))) {
-				pw.println("<!DOCTYPE html><html><head>");
-				pw.println("<meta charset='UTF-8'>");
-				pw.println("<title>끝판왕 설정파일</title>");
-				pw.println("<style>");
-				pw.println("body { font-family: 'Consolas','Malgun Gothic',monospace;");
-				pw.println("       background:#0d0d0d; color:#ffe066;");
-				pw.println("       padding:20px; line-height:1.6; }");
-				pw.println("pre  { white-space:pre-wrap; font-size:13px; }");
-				pw.println("</style></head><body><pre>");
-				pw.println(escaped);
-				pw.println("</pre></body></html>");
-			}
-			java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
-			} catch (Exception ex) {
-			JOptionPane.showMessageDialog(host.getOwnerComponent(),
-			"설정 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
-		}
-	}	//   	private void showIni() {
-
-	private void TrayMenuSetup (JMenu systemMenu) {
-		// ── 트레이로 보내기 (부모 전용) ───────────────────
-		JMenuItem trayItem = new JMenuItem("🗕 트레이로 보내기");
-		trayItem.addActionListener(e -> host.sendToTray());
-		systemMenu.add(trayItem);
-		// ── PC 부팅 시 자동 실행 (부모 전용) ──────────────
-		boolean isAutoStart = host.checkAutoStart();
-		JCheckBoxMenuItem autoStartItem = new JCheckBoxMenuItem("🚀 PC 부팅 시 자동 실행", isAutoStart);
-		autoStartItem.addActionListener(e -> host.autoStartItemActionListener(autoStartItem));
-		systemMenu.add(autoStartItem);
-		systemMenu.addSeparator();
-		// ── MainWindow (부모 전용) ─────────────────────────
-		JMenuItem mainWindowItem = new JMenuItem("🖥 MainWindow");
-		mainWindowItem.addActionListener(e -> host.showMainWindow());
-		systemMenu.add(mainWindowItem);
-		systemMenu.addSeparator();
-	}
     // ── SlideShow 서브메뉴 ────────────────────────────────────────
     private JMenu buildSlideShowMenu(JMenu slideMenu) {
         JCheckBoxMenuItem slideOnOff = new JCheckBoxMenuItem("Enable",
@@ -1039,41 +1026,6 @@ public class MenuBuilder {
 		"스트림 배경 안내", JOptionPane.INFORMATION_MESSAGE));
         ytMenu.add(guideItem);
 
-        // ── YouTube 목록 다운로드 ─────────────────────────────────
-        JMenuItem dlItem = new JMenuItem("⬇ YouTube 목록 다운로드");
-        dlItem.addActionListener(e -> {
-            int ans = JOptionPane.showConfirmDialog(
-                host.getOwnerComponent(),
-                "YouTube 목록을 서버에서 다운로드 받으시겠습니까?",
-                "YouTube 목록 다운로드",
-                JOptionPane.OK_CANCEL_OPTION,
-			JOptionPane.QUESTION_MESSAGE);
-            if (ans != JOptionPane.OK_OPTION) return;
-            try {
-                java.net.URL dlUrl = java.net.URI.create(
-				"https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/INI_bak/youTubeCctv.ini").toURL();
-                java.nio.file.Path dest = java.nio.file.Paths.get(
-				System.getProperty("user.dir"), "youTubeCctv.ini");
-                try (java.io.InputStream in = dlUrl.openStream()) {
-                    java.nio.file.Files.copy(in, dest,
-					java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-				}
-                JOptionPane.showMessageDialog(
-                    host.getOwnerComponent(),
-                    "다운로드 완료!\n" + dest,
-                    "YouTube 목록 다운로드",
-				JOptionPane.INFORMATION_MESSAGE);
-				} catch (Exception ex) {
-                JOptionPane.showMessageDialog(
-                    host.getOwnerComponent(),
-                    "다운로드 실패: " + ex.getMessage(),
-                    "YouTube 목록 다운로드",
-				JOptionPane.ERROR_MESSAGE);
-			}
-		});
-        ytMenu.add(new JSeparator());
-        ytMenu.add(dlItem);
-
         return ytMenu;
 	}
 
@@ -1217,18 +1169,18 @@ public class MenuBuilder {
             // if (!url.contains("/video") && !url.contains("/mjpeg"))
             if (!url.contains("/mjpeg"))
 			url = url.replaceAll("/+$", "");
-
+		
             host.setCameraUrl(url);   // INI에 저장
             host.stopSlideTimer();
             host.stopItsCctv();
             host.stopYoutube();
 			/*
-				host.setGalaxyMode(false);
-				host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false);
-				host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
-				host.setSparkleMode(false); host.setBubbleMode(false);
-				host.setBgColor(null);
-				host.setBgImage("", null);  // bgImage 미해제 버그 수정
+            host.setGalaxyMode(false);
+            host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false);
+            host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
+            host.setSparkleMode(false); host.setBubbleMode(false);
+            host.setBgColor(null);
+            host.setBgImage("", null);  // bgImage 미해제 버그 수정
 			*/
             host.setCameraMode(true);
             host.startCamera(url);
@@ -1236,7 +1188,7 @@ public class MenuBuilder {
             // 연결 시작 → 이미지저장/중지 활성화
             camCapture.setEnabled(true);
             camStop   .setEnabled(true);
-
+			
 		});
 
         camCapture.addActionListener(e -> {

@@ -2,7 +2,7 @@
 chcp 65001 > nul
 
 if "%1" =="" (
-    echo [ERRO] source ????[xxxx.java]
+    echo [ERRO] source ????   [class.java(X)]  [class(O)]
     echo 사용법: com.bat  source
 	PAUSE
     goto :end
@@ -27,7 +27,7 @@ echo SOURCE: %SOURCE_FILE%
 type nul > "%ERROR_FILE%"
 
 javac -d %OUT%  -Xlint:deprecation ^
-  --class-path "%OUT%;K:\java25\Lib\*" ^
+  --class-path "%OUT%;%LIB_PATH%\*" ^
   -encoding UTF-8 ^
   -sourcepath "%SOURCE_DIR%" ^
   "%SOURCE_FILE%" 2> "%ERROR_FILE%"

@@ -2532,7 +2532,7 @@ public class KootPanKing extends JFrame {
             if (!appRestarter.getCachedJsaPath().isEmpty())   config.setProperty("app.jsaPath",   appRestarter.getCachedJsaPath());
             config.setProperty("camera.url",      cameraUrl);
             //config.setProperty("its.cctv.apiKey", getItsCctv().getApiKey());
-			config.setProperty("its.cctv.apiKey", itsCctv != null ? itsCctv.getApiKey() : "");			
+			config.setProperty("its.cctv.apiKey", itsCctv != null ? itsCctv.getApiKey() : "");
             config.setProperty("cameraMode",  String.valueOf(cameraMode && camera != null && camera.isRunning()));
             config.setProperty("youtubeMode", String.valueOf(youtubeMode));
             config.setProperty("youtubeUrl",  youtubeUrl != null ? youtubeUrl : "");
@@ -2552,8 +2552,6 @@ public class KootPanKing extends JFrame {
             config.store(fos, "KootPanKing Settings");
 		} catch (IOException ignored) {}
 	}
-	
-	
 	
     /** 30초 카운트다운 Close 확인 후 disposeInstance 호출 */
     void confirmClose() {
@@ -2591,12 +2589,9 @@ public class KootPanKing extends JFrame {
             if (sec[0] <= 0) { countdown.stop(); dlg.dispose(); }
 		});
         countdown.start();
-		
         yesBtn.addActionListener(e -> { confirmed[0] = true;  countdown.stop(); dlg.dispose(); });
         noBtn .addActionListener(e -> { confirmed[0] = false; countdown.stop(); dlg.dispose(); });
-		
         dlg.setVisible(true);
-		
         if (confirmed[0]) {
             MenuBuilder.ClockHostContext ctx = new MenuBuilder.ClockHostContext(this);
             ctx.disposeInstance();
@@ -2642,12 +2637,9 @@ public class KootPanKing extends JFrame {
             if (sec[0] <= 0) { countdown.stop(); dlg.dispose(); }
 		});
         countdown.start();
-		
         yesBtn.addActionListener(e -> { confirmed[0] = true;  countdown.stop(); dlg.dispose(); });
         noBtn .addActionListener(e -> { confirmed[0] = false; countdown.stop(); dlg.dispose(); });
-		
         dlg.setVisible(true);  // modal 블로킹
-		
         if (confirmed[0]) { saveConfig(); sendShutdownEmailAndExit(); }
 	}
 	
@@ -2697,11 +2689,40 @@ public class KootPanKing extends JFrame {
     private boolean isReserved(boolean[][] m, int r, int c, int size) {
         return push.isReserved(m, r, c, size);
 	}
-    // ═══════════════════════════════════════════════════════════
+	
+	// ── 단일 인스턴스 락 ──────────────────────────────────────
+	private static java.nio.channels.FileChannel lockChannel;
+	private static java.nio.channels.FileLock    instanceLock;
+	private static boolean acquireSingleInstanceLock() {
+		try {
+			java.io.File lockFile = new java.io.File(
+			System.getProperty("user.dir"), "KootPanKing.lock");
+			lockChannel = new java.io.RandomAccessFile(lockFile, "rw").getChannel();
+			instanceLock = lockChannel.tryLock();
+			if (instanceLock == null) {
+				return false;  // 락 획득 실패 = 진짜 중복 실행
+			}
+			return true;
+			} catch (Exception e) {
+			// 락 자체를 걸 수 없는 환경 → 중복 체크 포기하고 그냥 실행
+			System.err.println("[SingleInstance] 락 불가 환경, 체크 생략: " + e.getMessage());
+			return true;
+		}
+	}
+	
+	// ═══════════════════════════════════════════════════════════
     //  Main
     // ═══════════════════════════════════════════════════════════
     public static void main(String[] args) {
-        AppLogger.init();   // ★ 로거 초기화 - 가장 먼저 실행
+		// ★ 중복 실행 방지 - 가장 먼저 실행
+		if (!acquireSingleInstanceLock()) {
+			JOptionPane.showMessageDialog(null,
+				thisProgramName + " 이(가) 이미 실행 중입니다.",
+			"중복 실행 방지", JOptionPane.WARNING_MESSAGE);
+			System.exit(0);
+		}
+		
+		AppLogger.init();   // ★ 로거 초기화 - 가장 먼저 실행
         System.out.println("[ " + thisProgramName + " ] [main] start");
         AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 시작");
         try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
