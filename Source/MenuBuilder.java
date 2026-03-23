@@ -56,7 +56,7 @@ public class MenuBuilder {
         boolean  checkAutoStart();
         GmailSender getGmail();
         TelegramBot getTg();
-
+		
         // ── 상태 쓰기 ─────────────────────────────────────────────
         void setAlwaysOnTop(boolean v);
         void setShowDigital(boolean v);
@@ -119,7 +119,7 @@ public class MenuBuilder {
         void autoStartItemActionListener(JCheckBoxMenuItem item);
         void showAlarmDialog();
         void sendToTray();            // 창을 숨기고 트레이로 보내기
-
+		
         // ── SlideShow ─────────────────────────────────────────────
         boolean isSlideRunning();         // slideTimer 실행 중 여부
         boolean isSlideImagesEmpty();     // slideImages 비어있는지
@@ -137,12 +137,12 @@ public class MenuBuilder {
         void    loadSlideImages();        // 폴더에서 이미지 재로드
         void    advanceSlide(int delta);  // 슬라이드 이전/다음
         void    showFolderChooser(JCheckBoxMenuItem slideOnOff); // folderItemAction 위임
-
+		
         // ── Global Cities ─────────────────────────────────────────
         String  getCityName();
         java.util.Set<String> getActiveCityNames(); // 실행 중인 자식 도시 이름 목록
         void    openCityInstance(String cityName, java.time.ZoneId zone); // 새 시계 인스턴스
-
+		
         // ── Camera ────────────────────────────────────────────────
         boolean isCameraMode();
         boolean isCameraRunning();        // 카메라 실제 연결(스트림) 중 여부
@@ -152,7 +152,7 @@ public class MenuBuilder {
         void    captureCamera();          // 현재 프레임 → img/ 저장
         String  getCameraUrl();
         void    setCameraUrl(String url);
-
+		
         // ── YouTube ───────────────────────────────────────────────
         boolean isYoutubeMode();
         String  getYoutubeUrl();
@@ -160,13 +160,13 @@ public class MenuBuilder {
         void    startYoutube(String url);
         void    stopYoutube();
         java.awt.Color getDesktopColor();  // Windows 바탕화면 색상
-
+		
         // ── ITS 교통 CCTV ─────────────────────────────────────────
         ItsCctvManager getItsCctv();      // lazy-init 접근
         String  getItsCctvApiKey();       // API 키만 조회 (lazy-init 방지)
         void    startItsCctv();           // 다른 배경 해제 + 타이머 시작
         void    stopItsCctv();            // 타이머 중지 + 배경 초기화
-
+		
         // ── Kakao ─────────────────────────────────────────────────
         String  getKakaoAccessToken();
         void    kakaoLogin();
@@ -174,28 +174,28 @@ public class MenuBuilder {
         void    showKakaoGuide();
         void    prepareMessageBox();      // JOptionPane 위치 조정
         void    prepareDialog(java.awt.Window dlg); // 다이얼로그 중앙 + 시계 우상단
-
+		
         // ── Google Calendar ───────────────────────────────────────
         GoogleCalendarService getCalendarService();  // null 이면 미설정
         TelegramBot           getTgForCalendar();    // 텔레그램 봇 (캘린더 전송용)
         // ── Naver Calendar ────────────────────────────────────────
         NaverCalendarService  getNaverCalendarService(); // null 이면 미설정
-
+		
         // ── Log / Config ──────────────────────────────────────────
         String  getLogFilePath();         // 현재 로그 파일 경로
         String  getConfigFilePath();      // 설정 파일(ini) 경로
-
+		
         // ── UI 부모 컴포넌트 ──────────────────────────────────────
         Component getOwnerComponent();    // JColorChooser 등의 parent
 	}
-
+	
     // ── 생성자 ────────────────────────────────────────────────────
     private final HostContext host;
-
+	
     public MenuBuilder(HostContext host) {
         this.host = host;
 	}
-
+	
     // ═══════════════════════════════════════════════════════════
     //  build() : 팝업 메뉴를 새로 만들어 반환
     // ═══════════════════════════════════════════════════════════
@@ -206,7 +206,7 @@ public class MenuBuilder {
         menu.add(buildAlwaysOnTopItem());
         menu.add(buildThemeMenu());
         menu.add(buildDigitalMenu());
-
+		
         if (!host.isChild()) menu.add(buildGlobalMenu(new JMenu("Global Cities...")));
         menu.add(buildOpacityMenu());
         menu.add(buildSlideShowMenu(new JMenu("Slide show")));
@@ -224,27 +224,35 @@ public class MenuBuilder {
         if (!host.isChild()) {
             menu.add(buildChimeItem());
             menu.add(buildAlarmItem());
-            menu.add(buildGmailCalendarMenu());
-            menu.add(buildKakaoMenu(new JMenu("카카오톡...")));
+            // menu.add(buildGmailCalendarMenu());
+			JMenu gmailMenu = buildGmailCalendarMenu();
+			gmailMenu.setEnabled(false);
+			menu.add(gmailMenu);
+			
+			// 비활성화 방법 1 - 메뉴 항목은 보이되 disabled
+			JMenu kakaoMenu = buildKakaoMenu(new JMenu("카카오톡..."));
+			kakaoMenu.setEnabled(false);
+			menu.add(kakaoMenu);
+			// menu.add(buildKakaoMenu(new JMenu("카카오톡...")));
             menu.add(buildTelegramMenu());
             menu.add(buildLifeMenu());
-        }
+		}
         menu.addSeparator();
         menu.add(buildSystemMenu());
         return menu;
-    }
+	}
     // ── Title ────────────────────────────────────────────────────
     private JMenuItem buildTitleItem() {
         return new JMenuItem(host.isChild() ? host.getCityName() : mainTitle);
-    }
-
+	}
+	
     // ── Always On Top ────────────────────────────────────────────
     private JCheckBoxMenuItem buildAlwaysOnTopItem() {
         JCheckBoxMenuItem aot = new JCheckBoxMenuItem("Always On Top", host.isAlwaysOnTop());
         aot.addActionListener(e -> host.setAlwaysOnTop(aot.isSelected()));
         return aot;
-    }
-
+	}
+	
     // ── Theme ────────────────────────────────────────────────────
     private JMenu buildThemeMenu() {
         JMenu themeMenu = new JMenu("Theme");
@@ -254,10 +262,10 @@ public class MenuBuilder {
             themeGroup.add(item);
             item.addActionListener(e -> { host.setTheme(t); host.repaintClock(); });
             themeMenu.add(item);
-        }
+		}
         return themeMenu;
-    }
-
+	}
+	
     // ── Digital Clock ────────────────────────────────────────────
     private JMenu buildDigitalMenu() {
         JMenu digitalMenu = new JMenu("Digital Clock");
@@ -265,26 +273,26 @@ public class MenuBuilder {
         digitalOnOff.addActionListener(e -> {
             host.setShowDigital(digitalOnOff.isSelected());
             host.repackAndKeepCenter();
-        });
+		});
         digitalMenu.add(digitalOnOff);
         digitalMenu.addSeparator();
-
+		
         // Digital Font sub-menu
         JMenu digFontMenu = new JMenu("Digital Font");
         String[] digFonts = {"Consolas", "Courier New", "Monospaced", "Arial", "Tahoma",
-            "Verdana", "Malgun Gothic", "굴림", "돋움"};
+		"Verdana", "Malgun Gothic", "굴림", "돋움"};
         ButtonGroup dfg = new ButtonGroup();
         for (String fn : digFonts) {
             JRadioButtonMenuItem fi = new JRadioButtonMenuItem(fn,
-                host.getDigitalFont().getFamily().equals(fn));
+			host.getDigitalFont().getFamily().equals(fn));
             dfg.add(fi);
             fi.addActionListener(e -> {
                 host.setDigitalFont(new Font(fn, host.getDigitalFont().getStyle(),
-                    host.getDigitalFont().getSize()));
+				host.getDigitalFont().getSize()));
                 host.repaintClock();
-            });
+			});
             digFontMenu.add(fi);
-        }
+		}
         digFontMenu.addSeparator();
         JMenu digSizeMenu = new JMenu("Size");
         for (int sz : new int[]{10, 11, 12, 13, 14, 16, 18, 20, 22, 24}) {
@@ -292,70 +300,70 @@ public class MenuBuilder {
             si.addActionListener(e -> {
                 host.setDigitalFont(host.getDigitalFont().deriveFont((float) sz));
                 host.repackAndKeepCenter();
-            });
+			});
             digSizeMenu.add(si);
-        }
+		}
         digFontMenu.add(digSizeMenu);
         digitalMenu.add(digFontMenu);
-
+		
         JCheckBoxMenuItem neonDigitalItem = new JCheckBoxMenuItem("NEON Digital", host.isNeonDigital());
         neonDigitalItem.addActionListener(e -> { host.setNeonDigital(neonDigitalItem.isSelected()); host.repaintClock(); });
         digitalMenu.add(neonDigitalItem);
-
+		
         JMenuItem digColorItem = new JMenuItem("Digital Color...");
         digColorItem.addActionListener(e -> {
             Color c = JColorChooser.showDialog(host.getOwnerComponent(), "디지털 글자색", host.getDigitalColor());
             if (c != null) { host.setDigitalColor(c); host.repaintClock(); }
-        });
+		});
         digitalMenu.add(digColorItem);
         digitalMenu.addSeparator();
-
+		
         if (!host.isChild()) {
             JCheckBoxMenuItem lunarItem = new JCheckBoxMenuItem("Lunar", host.isShowLunar());
             lunarItem.addActionListener(e -> { host.setShowLunar(lunarItem.isSelected()); host.repackAndKeepCenter(); });
             digitalMenu.add(lunarItem);
-        }
+		}
         digitalMenu.addSeparator();
-
+		
         JCheckBoxMenuItem noBgItem = new JCheckBoxMenuItem("배경 안보이기", host.isDigitalNoBg());
         noBgItem.addActionListener(e -> { host.setDigitalNoBg(noBgItem.isSelected()); host.repaintClock(); });
         digitalMenu.add(noBgItem);
         return digitalMenu;
-    }
-
+	}
+	
     // ── Opacity ──────────────────────────────────────────────────
     private JMenu buildOpacityMenu() {
         JMenu opacityMenu = new JMenu("Opacity");
         ButtonGroup opg = new ButtonGroup();
         for (int op : new int[]{100, 90, 80, 70, 60, 50, 40, 30}) {
             JRadioButtonMenuItem oi = new JRadioButtonMenuItem(op + "%",
-                Math.round(host.getOpacity() * 100) == op);
+			Math.round(host.getOpacity() * 100) == op);
             opg.add(oi);
             final float f = op / 100f;
             oi.addActionListener(e -> { host.setOpacity(f); host.saveConfig(); });
             opacityMenu.add(oi);
-        }
+		}
         return opacityMenu;
-    }
-
+	}
+	
     // ── 배경_설정 ─────────────────────────────────────────────────
     private JMenu buildBgMenu() {
         JMenuItem bgItem = new JMenuItem("배경색 지정...");
         bgItem.addActionListener(e -> {
             Color c = JColorChooser.showDialog(host.getOwnerComponent(), "배경색",
-                host.getBgColor() != null ? host.getBgColor() : Color.WHITE);
+			host.getBgColor() != null ? host.getBgColor() : Color.WHITE);
             if (c != null) { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(c); host.saveConfig(); host.repaintClock(); }
-        });
+		});
         JMenuItem bgImageItem = new JMenuItem("이미지 파일 선택...");
         bgImageItem.addActionListener(e -> {
             final String prev = host.getBgImagePath();
             new Thread(() -> {
                 final String initPath = (prev != null && !prev.isEmpty())
-                    ? new java.io.File(prev).getParent() : System.getProperty("user.home");
+				? new java.io.File(prev).getParent() : System.getProperty("user.home");
                 final JFileChooser fc = new JFileChooser(initPath);
                 fc.setDialogTitle("배경 이미지 선택");
                 fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
-                    "이미지 파일 (jpg, jpeg, png, bmp, gif)", "jpg", "jpeg", "png", "bmp", "gif"));
+				"이미지 파일 (jpg, jpeg, png, bmp, gif)", "jpg", "jpeg", "png", "bmp", "gif"));
                 javax.swing.SwingUtilities.invokeLater(() -> {
                     if (fc.showOpenDialog(host.getOwnerComponent()) != JFileChooser.APPROVE_OPTION) return;
                     final java.io.File f = fc.getSelectedFile();
@@ -371,16 +379,16 @@ public class MenuBuilder {
                                 host.setBgColor(null);
                                 host.setBgImage(f.getAbsolutePath(), img);
                                 host.saveConfig(); host.repaintClock();
-                            });
-                        } catch (Exception ex) {
+							});
+							} catch (Exception ex) {
                             javax.swing.SwingUtilities.invokeLater(() ->
                                 JOptionPane.showMessageDialog(host.getOwnerComponent(),
-                                    "이미지 로드 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE));
-                        }
-                    }, "BgImageLoader").start();
-                });
-            }, "BgImageChooserInit").start();
-        });
+								"이미지 로드 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE));
+						}
+					}, "BgImageLoader").start();
+				});
+			}, "BgImageChooserInit").start();
+		});
         JMenuItem bgReset   = new JMenuItem("배경색 초기화 (Marble)");
         bgReset.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setGalaxyMode(false); host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false); host.setBgImage("", null); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JMenuItem bgGalaxy  = new JMenuItem("Galaxy");
@@ -403,14 +411,14 @@ public class MenuBuilder {
         bgBubble.addActionListener(e -> { host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera(); host.stopItsCctv(); host.stopYoutube(); host.setBgImage("", null); host.setBubbleMode(true); host.setGalaxyMode(false); host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false); host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false); host.setSparkleMode(false); host.setBgColor(null); host.saveConfig(); host.repaintClock(); });
         JCheckBoxMenuItem bgNeon = new JCheckBoxMenuItem("💡 Neon", host.isNeonMode());
         bgNeon.addActionListener(e -> { host.setNeonMode(bgNeon.isSelected()); host.saveConfig(); host.repaintClock(); });
-
+		
         JMenu showMenu = new JMenu("▤  무지개 : 시간간격 →");
         for (int v : host.getIntervals()) {
             JCheckBoxMenuItem si = new JCheckBoxMenuItem(v == 0 ? "0 (중단)" : String.valueOf(v));
             si.setSelected(host.getShowInterval() == v);
             si.addActionListener(e -> { host.setShowInterval(v); host.startShowTimer(); host.saveConfig(); });
             showMenu.add(si);
-        }
+		}
         JMenu bgMenu = new JMenu("배경_설정");
         bgMenu.add(bgItem);
         bgMenu.add(bgImageItem);
@@ -437,12 +445,12 @@ public class MenuBuilder {
                 " ITS CCTV 이전 카메라    :  PgUp\n" +
                 " ITS CCTV 다음 카메라    :  PgDn\n" +
                 " 시계 크기 실시간 변경    :  마우스 스크롤",
-                "크기와 이동 속도 조절", JOptionPane.INFORMATION_MESSAGE));
+			"크기와 이동 속도 조절", JOptionPane.INFORMATION_MESSAGE));
             bgMenu.add(speedGuide);
-        }
+		}
         return bgMenu;
-    }
-
+	}
+	
     // ── 테두리 ───────────────────────────────────────────────────
     private JMenu buildBorderMenu() {
         JMenuItem borderItem = new JMenuItem("테두리 설정...");
@@ -454,17 +462,17 @@ public class MenuBuilder {
         borderMenu.addSeparator();
         borderMenu.add(borderItem);
         return borderMenu;
-    }
-
+	}
+	
     // ── 눈금 ─────────────────────────────────────────────────────
     private JMenu buildTickMenu() {
         JMenuItem tickItem = new JMenuItem("눈금 Color...");
         tickItem.addActionListener(e -> {
             Color def = host.getTheme().equals("Black") ? Color.WHITE : Color.BLACK;
             Color c = JColorChooser.showDialog(host.getOwnerComponent(), "눈금 색상",
-                host.getTickColor() != null ? host.getTickColor() : def);
+			host.getTickColor() != null ? host.getTickColor() : def);
             if (c != null) { host.setTickColor(c); host.repaintClock(); }
-        });
+		});
         JMenuItem tickReset = new JMenuItem("눈금 Color 초기화");
         tickReset.addActionListener(e -> { host.setTickColor(null); host.repaintClock(); });
         JCheckBoxMenuItem tickVisible = new JCheckBoxMenuItem("보이기", host.isTickVisible());
@@ -475,8 +483,8 @@ public class MenuBuilder {
         tickMenu.add(tickItem);
         tickMenu.add(tickReset);
         return tickMenu;
-    }
-
+	}
+	
     // ── 바늘 조정 ─────────────────────────────────────────────────
     private JMenu buildHandMenu() {
         JCheckBoxMenuItem secondVisibleItem = new JCheckBoxMenuItem("초침 보이기", host.isSecondVisible());
@@ -485,17 +493,17 @@ public class MenuBuilder {
         hourColorItem.addActionListener(e -> {
             Color c = JColorChooser.showDialog(host.getOwnerComponent(), "시침 색상", host.getHourColor());
             if (c != null) { host.setHourColor(c); host.repaintClock(); }
-        });
+		});
         JMenuItem minuteColorItem = new JMenuItem("분침 색깔 변경...");
         minuteColorItem.addActionListener(e -> {
             Color c = JColorChooser.showDialog(host.getOwnerComponent(), "분침 색상", host.getMinuteColor());
             if (c != null) { host.setMinuteColor(c); host.repaintClock(); }
-        });
+		});
         JMenuItem secondColorItem = new JMenuItem("초침 색깔 변경...");
         secondColorItem.addActionListener(e -> {
             Color c = JColorChooser.showDialog(host.getOwnerComponent(), "초침 색상", host.getSecondColor());
             if (c != null) { host.setSecondColor(c); host.repaintClock(); }
-        });
+		});
         JMenu handMenu = new JMenu("바늘 조정");
         handMenu.add(secondVisibleItem);
         handMenu.addSeparator();
@@ -503,13 +511,13 @@ public class MenuBuilder {
         handMenu.add(minuteColorItem);
         handMenu.add(hourColorItem);
         return handMenu;
-    }
-
+	}
+	
     // ── 1...12 폰트 ──────────────────────────────────────────────
     private JMenu buildFontMenu() {
         JMenu fontMenu = new JMenu("1...12 폰트");
         String[] fonts = {"Georgia", "Times New Roman", "Arial", "Tahoma", "Verdana",
-            "Palatino Linotype", "Book Antiqua", "Garamond", "Malgun Gothic", "굴림", "돋움"};
+		"Palatino Linotype", "Book Antiqua", "Garamond", "Malgun Gothic", "굴림", "돋움"};
         JMenu fontFamilyMenu = new JMenu("폰트 종류");
         ButtonGroup fntg = new ButtonGroup();
         for (String fn : fonts) {
@@ -517,22 +525,22 @@ public class MenuBuilder {
             fntg.add(fi);
             fi.addActionListener(e -> { host.setNumberFont(new Font(fn, Font.BOLD, host.getNumberFont().getSize())); host.repaintClock(); });
             fontFamilyMenu.add(fi);
-        }
+		}
         fontMenu.add(fontFamilyMenu);
         JMenu fontSizeMenu = new JMenu("폰트 크기");
         for (int sz : new int[]{8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32}) {
             JMenuItem si = new JMenuItem(String.valueOf(sz));
             si.addActionListener(e -> { host.setNumberFont(host.getNumberFont().deriveFont((float) sz)); host.repaintClock(); });
             fontSizeMenu.add(si);
-        }
+		}
         fontMenu.add(fontSizeMenu);
         JMenuItem numColorItem = new JMenuItem("숫자 Color...");
         numColorItem.addActionListener(e -> {
             Color def = host.getTheme().equals("Black") ? Color.WHITE : Color.BLACK;
             Color c = JColorChooser.showDialog(host.getOwnerComponent(), "숫자 색상",
-                host.getNumberColor() != null ? host.getNumberColor() : def);
+			host.getNumberColor() != null ? host.getNumberColor() : def);
             if (c != null) { host.setNumberColor(c); host.repaintClock(); }
-        });
+		});
         JMenuItem numColorReset = new JMenuItem("숫자 Color 초기화");
         numColorReset.addActionListener(e -> { host.setNumberColor(null); host.repaintClock(); });
         fontMenu.add(numColorItem);
@@ -542,8 +550,8 @@ public class MenuBuilder {
         showNumbersItem.addActionListener(e -> { host.setShowNumbers(showNumbersItem.isSelected()); host.repaintClock(); });
         fontMenu.add(showNumbersItem);
         return fontMenu;
-    }
-
+	}
+	
     // ── Animation ────────────────────────────────────────────────
     private JMenu buildAnimMenu() {
         JMenu animMenu = new JMenu("Animation");
@@ -552,25 +560,25 @@ public class MenuBuilder {
             ai.setSelected(host.getAnimInterval() == v);
             ai.addActionListener(e -> { host.setAnimInterval(v); host.startAnimTimer(); host.saveConfig(); });
             animMenu.add(ai);
-        }
+		}
         return animMenu;
-    }
-
+	}
+	
     // ── 차임벨 ───────────────────────────────────────────────────
     private JMenuItem buildChimeItem() {
         JMenuItem chimeItem = new JMenuItem("차임벨 설정...");
         chimeItem.addActionListener(e -> host.showChimeDialog());
         return chimeItem;
-    }
-
+	}
+	
     // ── 알람 ─────────────────────────────────────────────────────
     private JMenuItem buildAlarmItem() {
         JMenuItem alarmItem = new JMenuItem("알람 관리...");
         alarmItem.addActionListener(e -> host.showAlarmDialog());
         alarmItem.setEnabled(false); // [배포] 비활성화
         return alarmItem;
-    }
-
+	}
+	
     // ── 텔레그램 ─────────────────────────────────────────────────
     private JMenu buildTelegramMenu() {
         JMenu telegramMenu = new JMenu("텔레그램");
@@ -581,15 +589,15 @@ public class MenuBuilder {
         telegramHelpItem.addActionListener(e -> {
             try {
                 java.awt.Desktop.getDesktop().browse(new java.net.URI("https://blog.naver.com/garpsu/224213397702"));
-            } catch (Exception ex) {
+				} catch (Exception ex) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(), "브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
-            }
-        });
+			}
+		});
         telegramMenu.add(telegramHelpItem);
         telegramMenu.setEnabled(false); // [배포] 비활성화
         return telegramMenu;
-    }
-
+	}
+	
     // ── 생활도구 ─────────────────────────────────────────────────
     private JMenu buildLifeMenu() {
         JMenu lifeMenu = new JMenu("생활도구");
@@ -598,16 +606,16 @@ public class MenuBuilder {
             {"🕐 TIME.IS",    "https://time.is"},
             {"🕰 TIME&DATE",  "https://www.timeanddate.com/worldclock/full.html"},
             {"🌤 날씨",        "https://www.weather.go.kr/w/index.do"},
-        };
+		};
         for (String[] entry : lifeLinks) {
             JMenuItem li = new JMenuItem(entry[0]);
             final String url = entry[1];
             li.addActionListener(e -> {
                 try { java.awt.Desktop.getDesktop().browse(new java.net.URI(url)); }
                 catch (Exception ex) { JOptionPane.showMessageDialog(host.getOwnerComponent(), "브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE); }
-            });
+			});
             lifeMenu.add(li);
-        }
+		}
         lifeMenu.addSeparator();
         JMenuItem calendarItem = new JMenuItem("📅 만년달력");
         calendarItem.addActionListener(e -> openCalendarHtml(host.getOwnerComponent()));
@@ -616,8 +624,8 @@ public class MenuBuilder {
         calendarUpdateItem.addActionListener(e -> updateCalendarHtml(host.getOwnerComponent()));
         lifeMenu.add(calendarUpdateItem);
         return lifeMenu;
-    }
-
+	}
+	
     // ── 시스템 ───────────────────────────────────────────────────
     private JMenu buildSystemMenu() {
         systemMenu = new JMenu("시스템...");
@@ -629,18 +637,18 @@ public class MenuBuilder {
             String logPath = host.getLogFilePath();
             if (logPath == null || logPath.isEmpty()) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(), "로그 파일 경로를 찾을 수 없습니다.", "Log", JOptionPane.WARNING_MESSAGE); return;
-            }
+			}
             java.io.File logFile = new java.io.File(logPath);
             if (!logFile.exists()) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(), "로그 파일이 존재하지 않습니다.\n" + logPath, "Log", JOptionPane.WARNING_MESSAGE); return;
-            }
+			}
             try {
                 String logText;
                 try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(logFile), "UTF-8"))) {
                     StringBuilder sb = new StringBuilder(); String line;
                     while ((line = br.readLine()) != null) sb.append(line).append("\n");
                     logText = sb.toString();
-                }
+				}
                 String escaped = logText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
                 java.io.File htmlFile = java.io.File.createTempFile("applog_", ".html");
                 htmlFile.deleteOnExit();
@@ -649,10 +657,10 @@ public class MenuBuilder {
                     pw.println("body{font-family:'Consolas','Malgun Gothic',monospace;background:#0d0d0d;color:#c8ffc8;padding:20px;line-height:1.6;}");
                     pw.println("pre{white-space:pre-wrap;font-size:13px;}</style></head><body><pre>");
                     pw.println(escaped); pw.println("</pre></body></html>");
-                }
+				}
                 java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
-            } catch (Exception ex) { JOptionPane.showMessageDialog(host.getOwnerComponent(), "로그 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE); }
-        });
+			} catch (Exception ex) { JOptionPane.showMessageDialog(host.getOwnerComponent(), "로그 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE); }
+		});
         systemMenu.add(logItem);
         JMenuItem iniItem = new JMenuItem("⚙️ 기본설정파일...");
         iniItem.addActionListener(e -> {
@@ -660,14 +668,14 @@ public class MenuBuilder {
             java.io.File iniFile = new java.io.File(iniPath);
             if (!iniFile.exists()) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(), "설정 파일이 존재하지 않습니다.\n" + iniPath, "기본설정파일", JOptionPane.WARNING_MESSAGE); return;
-            }
+			}
             try {
                 String iniText;
                 try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(iniFile), "UTF-8"))) {
                     StringBuilder sb = new StringBuilder(); String line;
                     while ((line = br.readLine()) != null) sb.append(line).append("\n");
                     iniText = sb.toString();
-                }
+				}
                 String escaped = iniText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
                 java.io.File htmlFile = java.io.File.createTempFile("appcfg_", ".html");
                 htmlFile.deleteOnExit();
@@ -676,10 +684,10 @@ public class MenuBuilder {
                     pw.println("body{font-family:'Consolas','Malgun Gothic',monospace;background:#0d0d0d;color:#ffe066;padding:20px;line-height:1.6;}");
                     pw.println("pre{white-space:pre-wrap;font-size:13px;}</style></head><body><pre>");
                     pw.println(escaped); pw.println("</pre></body></html>");
-                }
+				}
                 java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
-            } catch (Exception ex) { JOptionPane.showMessageDialog(host.getOwnerComponent(), "설정 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE); }
-        });
+			} catch (Exception ex) { JOptionPane.showMessageDialog(host.getOwnerComponent(), "설정 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE); }
+		});
         systemMenu.add(iniItem);
         systemMenu.addSeparator();
         if (!host.isChild()) {
@@ -695,7 +703,7 @@ public class MenuBuilder {
             mainWindowItem.addActionListener(e -> host.showMainWindow());
             systemMenu.add(mainWindowItem);
             systemMenu.addSeparator();
-        }
+		}
         JMenuItem closeItem = new JMenuItem("Close");
         closeItem.addActionListener(e -> host.confirmClose());
         systemMenu.add(closeItem);
@@ -706,10 +714,10 @@ public class MenuBuilder {
             JMenuItem exitItem = new JMenuItem("EXIT");
             exitItem.addActionListener(e -> host.confirmAndExit());
             systemMenu.add(exitItem);
-        }
+		}
         return systemMenu;
-    }
-
+	}
+	
     // ── SlideShow 서브메뉴 ────────────────────────────────────────
     private JMenu buildSlideShowMenu(JMenu slideMenu) {
         JCheckBoxMenuItem slideOnOff = new JCheckBoxMenuItem("Enable",
@@ -735,11 +743,11 @@ public class MenuBuilder {
 		});
         slideMenu.add(slideOnOff);
         slideMenu.addSeparator();
-
+		
         JMenuItem folderItem = new JMenuItem("폴더 선택...");
         folderItem.addActionListener(e -> host.showFolderChooser(slideOnOff));
         slideMenu.add(folderItem);
-
+		
         JMenu slideIntervalMenu = new JMenu("간격");
         ButtonGroup sig = new ButtonGroup();
         for (int sec : new int[]{0, 1, 2, 3, 4, 5, 10, 15, 20, 30, 60}) {
@@ -756,7 +764,7 @@ public class MenuBuilder {
 		}
         slideMenu.add(slideIntervalMenu);
         slideMenu.addSeparator();
-
+		
         // 오버레이 어둡기 조절
         JMenu overlayMenu = new JMenu("오버레이 어둡기");
         ButtonGroup ovg = new ButtonGroup();
@@ -771,7 +779,7 @@ public class MenuBuilder {
 		}
         slideMenu.add(overlayMenu);
         slideMenu.addSeparator();
-
+		
         // ── 전환 효과 서브메뉴 ─────────────────────────────────────
         JMenu fxMenu = new JMenu("전환 효과");
         ButtonGroup fxBg = new ButtonGroup();
@@ -798,7 +806,7 @@ public class MenuBuilder {
         slideMenu.add(slideNext);
         return slideMenu;
 	}
-
+	
     // ── Global Cities 서브메뉴 ────────────────────────────────────
     private JMenu buildGlobalMenu(JMenu globalMenu) {
         String[][] cities = {
@@ -812,7 +820,7 @@ public class MenuBuilder {
             {"Toronto","America/Toronto"},{"São Paulo","America/Sao_Paulo"},
             {"Sydney","Australia/Sydney"},{"Auckland","Pacific/Auckland"},
             {"Local","local"}
-        };
+		};
         java.util.Set<String> active = host.getActiveCityNames();
         for (String[] city : cities) {
             final String cn = city[0];
@@ -823,28 +831,28 @@ public class MenuBuilder {
             JMenuItem ci = new JMenuItem(label);
             if (isCurrent || isRunning) {
                 ci.setEnabled(false);
-            } else {
+				} else {
                 ci.addActionListener(e -> {
                     java.time.ZoneId newZone = tz.equals("local")
-                        ? java.time.ZoneId.systemDefault()
-                        : java.time.ZoneId.of(tz);
+					? java.time.ZoneId.systemDefault()
+					: java.time.ZoneId.of(tz);
                     host.openCityInstance(cn, newZone);
-                });
-            }
+				});
+			}
             globalMenu.add(ci);
-        }
+		}
         return globalMenu;
-    }
-
+	}
+	
     /** SplashWindow [File → Global] 용 public 래퍼 */
     public JMenu buildGlobalMenuPublic() {
         return buildGlobalMenu(new JMenu("🌍 Global Cities..."));
 	}
-
+	
     // ── YouTube 배경 메뉴 ─────────────────────────────────────────
     private JMenu buildYoutubeMenuItem() {
         JMenu ytMenu = new JMenu("▶ 스트림 배경 (YouTube/CCTV)");
-
+		
         // ── 현재 상태 표시 라벨 ───────────────────────────────────
         JMenuItem statusItem = new JMenuItem(
             host.isYoutubeMode()
@@ -853,24 +861,24 @@ public class MenuBuilder {
         statusItem.setEnabled(false);
         ytMenu.add(statusItem);
         ytMenu.add(new JSeparator());
-
+		
         // ── youTubeCctv.ini 목록 ─────────────────────────────────
         java.util.List<String[]> iniList = loadStreamIni();
         if (iniList.isEmpty()) {
             JMenuItem emptyItem = new JMenuItem("(목록 없음 - youTubeCctv.ini 확인)");
             emptyItem.setEnabled(false);
             ytMenu.add(emptyItem);
-        } else {
+			} else {
             for (String[] entry : iniList) {
                 String label = entry[0];
                 String url   = entry[1];
                 JMenuItem item = new JMenuItem(label);
                 item.addActionListener(ev -> startStream(url));
                 ytMenu.add(item);
-            }
-        }
+			}
+		}
         ytMenu.add(new JSeparator());
-
+		
         // ── URL 직접 입력 ─────────────────────────────────────────
         JMenuItem startItem = new JMenuItem("🔗 URL 직접 입력...");
         startItem.addActionListener(e -> {
@@ -892,7 +900,7 @@ public class MenuBuilder {
             startStream(url.trim());
 		});
         ytMenu.add(startItem);
-
+		
         // ── 중지 ──────────────────────────────────────────────────
         JMenuItem stopItem = new JMenuItem("⏹ 중지");
         stopItem.setEnabled(host.isYoutubeMode());
@@ -902,9 +910,9 @@ public class MenuBuilder {
             host.repaintClock();
 		});
         ytMenu.add(stopItem);
-
+		
         ytMenu.add(new JSeparator());
-
+		
         // ── 안내 ──────────────────────────────────────────────────
         JMenuItem guideItem = new JMenuItem("❓ 사용 방법 안내");
         guideItem.addActionListener(e -> JOptionPane.showMessageDialog(
@@ -927,7 +935,7 @@ public class MenuBuilder {
             "※ YouTube 이용약관을 준수하여 사용하세요.",
 		"스트림 배경 안내", JOptionPane.INFORMATION_MESSAGE));
         ytMenu.add(guideItem);
-
+		
         // ── YouTube 목록 다운로드 ─────────────────────────────────
         JMenuItem dlItem = new JMenuItem("⬇ YouTube 목록 다운로드");
         dlItem.addActionListener(e -> {
@@ -936,32 +944,32 @@ public class MenuBuilder {
                 "YouTube 목록을 서버에서 다운로드 받으시겠습니까?",
                 "YouTube 목록 다운로드",
                 JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.QUESTION_MESSAGE);
+			JOptionPane.QUESTION_MESSAGE);
             if (ans != JOptionPane.OK_OPTION) return;
             try {
                 java.net.URL dlUrl = java.net.URI.create(
-                    "https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/INI_bak/youTubeCctv.ini").toURL();
+				"https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/INI_bak/youTubeCctv.ini").toURL();
                 java.nio.file.Path dest = java.nio.file.Paths.get(
-                    System.getProperty("user.dir"), "youTubeCctv.ini");
+				System.getProperty("user.dir"), "youTubeCctv.ini");
                 try (java.io.InputStream in = dlUrl.openStream()) {
                     java.nio.file.Files.copy(in, dest,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                }
+					java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				}
                 JOptionPane.showMessageDialog(host.getOwnerComponent(),
                     "다운로드 완료!\n" + dest,
-                    "YouTube 목록 다운로드", JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception ex) {
+				"YouTube 목록 다운로드", JOptionPane.INFORMATION_MESSAGE);
+				} catch (Exception ex) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(),
                     "다운로드 실패: " + ex.getMessage(),
-                    "YouTube 목록 다운로드", JOptionPane.ERROR_MESSAGE);
-            }
-        });
+				"YouTube 목록 다운로드", JOptionPane.ERROR_MESSAGE);
+			}
+		});
         ytMenu.add(new JSeparator());
         ytMenu.add(dlItem);
-
+		
         return ytMenu;
 	}
-
+	
     /** 배경 모드 전부 해제 후 스트림 시작 공통 메서드 */
     private void startStream(String url) {
         host.stopSlideTimer(); host.stopShowTimer();
@@ -976,7 +984,7 @@ public class MenuBuilder {
         host.startYoutube(url);
         host.saveConfig();
 	}
-
+	
     /**
 		* youTubeCctv.ini 파싱.
 		* 형식: [이름]URL  (한 줄에 하나)
@@ -985,7 +993,7 @@ public class MenuBuilder {
 	*/
     private java.util.List<String[]> loadStreamIni() {
         java.util.List<String[]> list = new java.util.ArrayList<>();
-
+		
         // 실행 폴더 기준으로 탐색
         java.io.File iniFile = null;
         try {
@@ -996,21 +1004,21 @@ public class MenuBuilder {
                 iniFile = new java.io.File(jarDir, "youTubeCctv.ini");
 			}
 		} catch (Exception ignored) {}
-
+		
         if (iniFile == null || !iniFile.exists())
 		iniFile = new java.io.File("youTubeCctv.ini");
-
+		
         // 파일 없으면 GitHub 에서 다운로드
         if (!iniFile.exists()) {
             System.out.println("[StreamIni] 파일 없음 → GitHub 다운로드 시도");
             downloadStreamIni(iniFile);
 		}
-
+		
         if (!iniFile.exists()) {
             System.out.println("[StreamIni] 다운로드 실패 — 목록 없음");
             return list;
 		}
-
+		
         try (java.io.BufferedReader br = new java.io.BufferedReader(
 			new java.io.InputStreamReader(
 			new java.io.FileInputStream(iniFile), "UTF-8"))) {
@@ -1034,11 +1042,11 @@ public class MenuBuilder {
         System.out.println("[StreamIni] " + list.size() + "개 로드됨");
         return list;
 	}
-
+	
     /** youTubeCctv_default.ini 를 GitHub 에서 다운로드하여 destFile 로 저장 */
     private void downloadStreamIni(java.io.File destFile) {
         final String DEFAULT_URL =
-		"https://raw.githubusercontent.com/GarpsuKim/KootPanKing/refs/heads/main/youTubeCctv_default.ini";
+		"https://raw.githubusercontent.com/GarpsuKim/KootPanKing/refs/heads/main/INI_bak/youTubeCctv_default.ini";
         System.out.println("[StreamIni] 다운로드 시도: " + DEFAULT_URL);
         try {
             java.net.URL url = new java.net.URI(DEFAULT_URL).toURL();
@@ -1063,28 +1071,28 @@ public class MenuBuilder {
             System.out.println("[StreamIni] 다운로드 오류: " + e.getMessage());
 		}
 	}
-
+	
     /** 문자열이 maxLen 보다 길면 뒤를 ... 으로 자름 */
     private String truncate(String s, int maxLen) {
         if (s == null) return "";
         return s.length() <= maxLen ? s : s.substring(0, maxLen - 3) + "...";
 	}
-
+	
     // ── 카카오톡 서브메뉴 ─────────────────────────────────────────
     // ── 스마트폰 카메라 메뉴 ─────────────────────────────────────
     private JMenu buildCameraMenuItem() {
         JMenu camMenu = new JMenu("📷 스마트폰 카메라");
-
+		
         boolean camRunning = host.isCameraRunning();
-
+		
         JMenuItem camStart = new JMenuItem("▶ 폰 카메라 연결");
         JMenuItem camCapture = new JMenuItem("📸 이미지 저장");
         JMenuItem camStop    = new JMenuItem("⏹ 폰 카메라 중지");
-
+		
         // 초기 활성화 상태: 연결 중일 때만 이미지저장/중지 활성화
         camCapture.setEnabled(camRunning);
         camStop   .setEnabled(camRunning);
-
+		
         camStart.addActionListener(e -> {
             // 저장된 URL을 기본값으로 표시
             String input = (String) JOptionPane.showInputDialog(
@@ -1102,18 +1110,18 @@ public class MenuBuilder {
             // if (!url.contains("/video") && !url.contains("/mjpeg"))
             if (!url.contains("/mjpeg"))
 			url = url.replaceAll("/+$", "");
-		
+			
             host.setCameraUrl(url);   // INI에 저장
             host.stopSlideTimer();
             host.stopItsCctv();
             host.stopYoutube();
 			/*
-            host.setGalaxyMode(false);
-            host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false);
-            host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
-            host.setSparkleMode(false); host.setBubbleMode(false);
-            host.setBgColor(null);
-            host.setBgImage("", null);  // bgImage 미해제 버그 수정
+				host.setGalaxyMode(false);
+				host.setMatrixMode(false); host.setMatrix2Mode(false); host.setMatrix3Mode(false);
+				host.setRainMode(false); host.setSnowMode(false); host.setFireMode(false);
+				host.setSparkleMode(false); host.setBubbleMode(false);
+				host.setBgColor(null);
+				host.setBgImage("", null);  // bgImage 미해제 버그 수정
 			*/
             host.setCameraMode(true);
             host.startCamera(url);
@@ -1123,7 +1131,7 @@ public class MenuBuilder {
             camStop   .setEnabled(true);
 			
 		});
-
+		
         camCapture.addActionListener(e -> {
             if (!host.isCameraMode()) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(),
@@ -1132,7 +1140,7 @@ public class MenuBuilder {
 			}
             host.captureCamera();
 		});
-
+		
         camStop.addActionListener(e -> {
             host.stopCamera();
             // host.setBgColor(null);
@@ -1141,7 +1149,7 @@ public class MenuBuilder {
             camCapture.setEnabled(false);
             camStop   .setEnabled(false);
 		});
-
+		
         JMenuItem camInstall = new JMenuItem("📲 IP WebCam 설치 (Play Store)");
         camInstall.addActionListener(e -> {
             try {
@@ -1152,7 +1160,7 @@ public class MenuBuilder {
 				"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 			}
 		});
-
+		
         camMenu.add(camStart);
         camMenu.add(camCapture);
         camMenu.add(camStop);
@@ -1162,7 +1170,7 @@ public class MenuBuilder {
         camMenu.add(buildCameraGuideItem());
         return camMenu;
 	}
-
+	
 	/*
 		private JMenuItem buildCameraGuideItem() {
         JMenuItem guideItem = new JMenuItem("📖 사용방법 안내");
@@ -1170,14 +1178,14 @@ public class MenuBuilder {
 		// ── cameraGuide.txt 읽기 ──────────────────────────────
 		String guideText = readCameraGuide();
 		if (guideText == null) return; // 오류 메시지는 readCameraGuide 내부에서 표시
-
+		
 		// ── 이메일 + 텔레그램 병렬 전송 ──────────────────────
 		GmailSender gmail = host.getGmail();
 		TelegramBot tg    = host.getTg();
-
+		
 		boolean emailOk = gmail.isConfigured() && !gmail.lastTo.isEmpty();
 		boolean tgOk    = tg.polling && !tg.botToken.isEmpty() && !tg.myChatId.isEmpty();
-
+		
 		if (!emailOk && !tgOk) {
 		JOptionPane.showMessageDialog(host.getOwnerComponent(),
 		"이메일과 텔레그램이 모두 설정되어 있지 않습니다.\n"
@@ -1185,10 +1193,10 @@ public class MenuBuilder {
 		"안내 전송 실패", JOptionPane.WARNING_MESSAGE);
 		return;
 		}
-
+		
 		final String subject = "[끝판왕] 스마트폰 카메라 사용방법 안내";
 		final String body    = guideText;
-
+		
 		if (emailOk) {
 		new Thread(() -> {
 		try {
@@ -1199,7 +1207,7 @@ public class MenuBuilder {
 		}
 		}, "CameraGuide-Email").start();
 		}
-
+		
 		if (tgOk) {
 		new Thread(() -> {
 		try {
@@ -1210,14 +1218,14 @@ public class MenuBuilder {
 		}
 		}, "CameraGuide-Telegram").start();
 		}
-
+		
 		// ── 전송 완료 메시지 ──────────────────────────────────
 		StringBuilder sent = new StringBuilder();
 		if (emailOk)   sent.append("이메일");
 		if (emailOk && tgOk) sent.append("과 ");
 		if (tgOk)      sent.append("텔레그램 메시지");
 		sent.append("로 카메라 사용방법 안내문을 보냈습니다.");
-
+		
 		JOptionPane.showMessageDialog(host.getOwnerComponent(),
 		sent.toString(), "안내 전송", JOptionPane.INFORMATION_MESSAGE);
         });
@@ -1232,7 +1240,7 @@ public class MenuBuilder {
         File txtFile = (f != null) ? new File(f, "cameraGuide.txt")
 		: new File("cameraGuide.txt");
         if (!txtFile.exists()) txtFile = new File("cameraGuide.txt");
-
+		
         if (!txtFile.exists()) {
 		JOptionPane.showMessageDialog(host.getOwnerComponent(),
 		"cameraGuide.txt 파일을 찾을 수 없습니다.\n"
@@ -1240,9 +1248,9 @@ public class MenuBuilder {
 		"파일 없음", JOptionPane.ERROR_MESSAGE);
 		return null;
         }
-
+		
 		showCameraGuide (this);
-
+		
 		try (java.io.BufferedReader br = new java.io.BufferedReader(
 		new java.io.InputStreamReader(
 		new java.io.FileInputStream(txtFile), "UTF-8"))) {
@@ -1258,8 +1266,8 @@ public class MenuBuilder {
         }
 		}
 	*/
-
-
+	
+	
     // ── 카매라 안내 HTML 파일 열기 ─────────────────────────────
 	/*
 		public void showCameraGuide(java.awt.Component parent) {
@@ -1276,7 +1284,7 @@ public class MenuBuilder {
 		}
 		} catch (Exception ignored) {}
 		}
-
+		
 		String content;
 		if (txtFile.exists()) {
 		java.io.BufferedReader br = new java.io.BufferedReader(
@@ -1290,14 +1298,14 @@ public class MenuBuilder {
 		} else {
 		content = "cameraGuide.txt 파일을 찾을 수 없습니다.\n실행 파일과 같은 폴더에 cameraGuide.txt 를 넣어주세요.";
 		}
-
+		
 		// URL → <a href> 링크 변환 후 HTML 생성
 		String escaped = content
 		.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 		String html = escaped.replaceAll(
 		"(https?://[\\S]+)",
 		"<a href='$1' target='_blank'>$1</a>");
-
+		
 		java.io.File htmlFile = java.io.File.createTempFile("camera_Guide_", ".html");
 		htmlFile.deleteOnExit();
 		try (java.io.PrintWriter pw = new java.io.PrintWriter(
@@ -1318,7 +1326,7 @@ public class MenuBuilder {
 		pw.println("</pre></body></html>");
 		}
 		java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
-
+		
         } catch (Exception e) {
 		javax.swing.JOptionPane.showMessageDialog(parent,
 		"안내 파일 열기 실패: " + e.getMessage(),
@@ -1326,16 +1334,16 @@ public class MenuBuilder {
         }
 		}
 	*/
-
-
-
+	
+	
+	
     private JMenuItem buildCameraGuideItem() {
         JMenuItem guideItem = new JMenuItem("📖 사용방법 안내");
         guideItem.addActionListener(e -> {
             final String GUIDE_URL     = "https://blog.naver.com/garpsu/224213426659";
             final String GUIDE_MSG     = "PC와 스마트폰 카메라 연결 방법 안내 : " + GUIDE_URL;
             final String GUIDE_SUBJECT = "[끝판왕] PC와 스마트폰 카메라 연결 방법 안내";
-
+			
             // ── ① 브라우저로 안내 URL 열기 ───────────────────────
             new Thread(() -> {
                 try {
@@ -1344,14 +1352,14 @@ public class MenuBuilder {
                     System.out.println("[CameraGuide] 브라우저 열기 실패: " + ex.getMessage());
 				}
 			}, "CameraGuide-Browser").start();
-
+			
             // ── ② 텔레그램 + 이메일 병렬 전송 ───────────────────
             GmailSender gmail = host.getGmail();
             TelegramBot tg    = host.getTg();
-
+			
             boolean emailOk = gmail.isConfigured() && !gmail.lastTo.isEmpty();
             boolean tgOk    = tg.polling && !tg.botToken.isEmpty() && !tg.myChatId.isEmpty();
-
+			
             if (emailOk) {
                 new Thread(() -> {
                     try {
@@ -1362,7 +1370,7 @@ public class MenuBuilder {
 					}
 				}, "CameraGuide-Email").start();
 			}
-
+			
             if (tgOk) {
                 new Thread(() -> {
                     try {
@@ -1373,7 +1381,7 @@ public class MenuBuilder {
 					}
 				}, "CameraGuide-Telegram").start();
 			}
-
+			
             // ── ③ 완료 다이얼로그 ────────────────────────────────
             JOptionPane.showMessageDialog(host.getOwnerComponent(),
                 "PC와 스마트폰 카메라 연결 방법을 텔레그램 메시지로 보냈습니다.\n"
@@ -1382,19 +1390,19 @@ public class MenuBuilder {
 		});
         return guideItem;
 	}
-
-
+	
+	
     private JMenu buildItsCctvMenuItem() {
         JMenu cctvMenu = new JMenu("🚦 ITS 교통 CCTV");
-
+		
         // ── API 키 설정 ──────────────────────────────────────
         JMenuItem keyItem = new JMenuItem("🔑 API 키 설정...");
         keyItem.addActionListener(e -> {
             ItsCctvManager mgr = host.getItsCctv();
             String cur = mgr.getApiKey();
-
+			
             JTextField keyField = new JTextField(cur, 36);
-
+			
             // ── 서버에서 키 값 수신 버튼 ─────────────────────────
             JButton fetchBtn = new JButton("🌐 서버에서 키 값 수신");
             fetchBtn.addActionListener(ev -> {
@@ -1404,73 +1412,73 @@ public class MenuBuilder {
                     try {
                         java.net.URL dlUrl = java.net.URI.create(
                             "https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/INI_bak/ITS_API_KEY.txt"
-                        ).toURL();
+						).toURL();
                         try (java.io.BufferedReader br = new java.io.BufferedReader(
-                                new java.io.InputStreamReader(dlUrl.openStream()))) {
-                            String line = br.readLine();
-                            if (line != null) {
-                                String key = line.trim();
-                                SwingUtilities.invokeLater(() -> keyField.setText(key));
-                            }
+						new java.io.InputStreamReader(dlUrl.openStream()))) {
+						String line = br.readLine();
+						if (line != null) {
+							String key = line.trim();
+							SwingUtilities.invokeLater(() -> keyField.setText(key));
+						}
                         }
                         SwingUtilities.invokeLater(() -> fetchBtn.setText("✅ 수신 완료"));
-                    } catch (Exception ex) {
+						} catch (Exception ex) {
                         SwingUtilities.invokeLater(() -> {
                             fetchBtn.setText("❌ 수신 실패");
                             fetchBtn.setEnabled(true);
-                        });
-                    }
-                }, "ItsKeyFetch").start();
-            });
-
+						});
+					}
+				}, "ItsKeyFetch").start();
+			});
+			
             // ── JDialog 직접 구성 ─────────────────────────────────
             java.awt.Window owner = host.getOwnerComponent() instanceof java.awt.Window
-                ? (java.awt.Window) host.getOwnerComponent()
-                : SwingUtilities.getWindowAncestor(host.getOwnerComponent());
+			? (java.awt.Window) host.getOwnerComponent()
+			: SwingUtilities.getWindowAncestor(host.getOwnerComponent());
             JDialog dlg = new JDialog(owner, "ITS API 키 설정", java.awt.Dialog.ModalityType.APPLICATION_MODAL);
-
+			
             JLabel label = new JLabel(
                 "<html><b>ITS 국가교통정보센터 API 키 입력</b><br><br>"
                 + "발급처: <b>https://www.its.go.kr</b><br>"
                 + "회원가입 → 오픈데이터 → CCTV 화상자료 → 인증키 신청<br><br>"
-                + "현재 키: " + (cur.isEmpty() ? "(없음)" : cur.substring(0, Math.min(8, cur.length())) + "...") + "</html>");
-
+			+ "현재 키: " + (cur.isEmpty() ? "(없음)" : cur.substring(0, Math.min(8, cur.length())) + "...") + "</html>");
+			
             JButton okBtn     = new JButton("확인");
             JButton cancelBtn = new JButton("취소");
             JPanel btnPanel   = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT));
             btnPanel.add(okBtn);
             btnPanel.add(cancelBtn);
-
+			
             JPanel center = new JPanel(new java.awt.BorderLayout(0, 6));
             center.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 10, 4, 10));
             center.add(label,    java.awt.BorderLayout.NORTH);
             center.add(keyField, java.awt.BorderLayout.CENTER);
             center.add(fetchBtn, java.awt.BorderLayout.SOUTH);
-
+			
             dlg.getContentPane().add(center,   java.awt.BorderLayout.CENTER);
             dlg.getContentPane().add(btnPanel, java.awt.BorderLayout.SOUTH);
             dlg.pack();
             dlg.setLocationRelativeTo(owner);
-
+			
             final boolean[] confirmed = {false};
             okBtn.addActionListener(ev2 -> { confirmed[0] = true; dlg.dispose(); });
             cancelBtn.addActionListener(ev2 -> dlg.dispose());
             dlg.setVisible(true);
-
+			
             if (!confirmed[0]) return;
             String input = keyField.getText().trim();
             mgr.setApiKey(input);
             host.saveConfig();
             JOptionPane.showMessageDialog(host.getOwnerComponent(),
-                "API 키가 저장되었습니다.", "ITS CCTV", JOptionPane.INFORMATION_MESSAGE);
-        });
+			"API 키가 저장되었습니다.", "ITS CCTV", JOptionPane.INFORMATION_MESSAGE);
+		});
         cctvMenu.add(keyItem);
         cctvMenu.addSeparator();
-
+		
         // ── CCTV 목록 조회 + 연결 — API 키 없으면 비활성 ────────
         String _apiKey = host.getItsCctvApiKey();
         boolean _running = !_apiKey.isEmpty() && host.getItsCctv().isRunning();
-
+		
         JMenuItem connectItem = new JMenuItem("▶ CCTV 목록 조회 및 연결");
         connectItem.setEnabled(!_apiKey.isEmpty());
         connectItem.addActionListener(e -> {
@@ -1518,7 +1526,7 @@ public class MenuBuilder {
 				});
 		});
         cctvMenu.add(connectItem);
-
+		
         // ── 이전 / 다음 ──────────────────────────────────────
         JMenuItem prevItem = new JMenuItem("◀ 이전 카메라");
         prevItem.setEnabled(_running);
@@ -1529,7 +1537,7 @@ public class MenuBuilder {
             System.out.println("[ItsCctv] 이전: " + mgr.currentName());
 		});
         cctvMenu.add(prevItem);
-
+		
         JMenuItem nextItem = new JMenuItem("▶ 다음 카메라");
         nextItem.setEnabled(_running);
         nextItem.addActionListener(e -> {
@@ -1539,9 +1547,9 @@ public class MenuBuilder {
             System.out.println("[ItsCctv] 다음: " + mgr.currentName());
 		});
         cctvMenu.add(nextItem);
-
+		
         cctvMenu.addSeparator();
-
+		
         // ── 중지 ─────────────────────────────────────────────
         JMenuItem stopItem = new JMenuItem("⏹ CCTV 중지");
         stopItem.setEnabled(_running);
@@ -1550,9 +1558,9 @@ public class MenuBuilder {
             host.repaintClock();
 		});
         cctvMenu.add(stopItem);
-
+		
         cctvMenu.addSeparator();
-
+		
         // ── 안내 ─────────────────────────────────────────────
         JMenuItem guideItem = new JMenuItem("📖 ITS API 신청 안내");
         guideItem.addActionListener(e -> {
@@ -1565,10 +1573,10 @@ public class MenuBuilder {
 			}
 		});
         cctvMenu.add(guideItem);
-
+		
         return cctvMenu;
 	}
-
+	
     /**
 		* ITS 교통 CCTV 선택 다이얼로그.
 		* "도시 이름" 텍스트 필드로 CCTV 목록을 실시간 필터링한다.
@@ -1577,7 +1585,7 @@ public class MenuBuilder {
 		java.awt.Component owner,
 		java.util.List<ItsCctvManager.CctvItem> allItems,
 		ItsCctvManager mgr) {
-
+		
         java.awt.Window window = (owner instanceof java.awt.Window)
 		? (java.awt.Window) owner
 		: javax.swing.SwingUtilities.getWindowAncestor(owner);
@@ -1585,7 +1593,7 @@ public class MenuBuilder {
 		java.awt.Dialog.ModalityType.APPLICATION_MODAL);
         dlg.setLayout(new BorderLayout(6, 6));
         dlg.getRootPane().setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
+		
         // ── 상단: 도시 이름 필터 ─────────────────────────────────
         JPanel filterPanel = new JPanel(new BorderLayout(6, 0));
         filterPanel.setBorder(BorderFactory.createTitledBorder("도시 이름"));
@@ -1595,7 +1603,7 @@ public class MenuBuilder {
         JButton filterBtn = new JButton("필터");
         filterPanel.add(filterBtn, BorderLayout.EAST);
         dlg.add(filterPanel, BorderLayout.NORTH);
-
+		
         // ── 중앙: CCTV 목록 ──────────────────────────────────────
         DefaultListModel<ItsCctvManager.CctvItem> listModel = new DefaultListModel<>();
         allItems.forEach(listModel::addElement);
@@ -1606,7 +1614,7 @@ public class MenuBuilder {
         JScrollPane scroll = new JScrollPane(cctvList);
         scroll.setPreferredSize(new java.awt.Dimension(480, 570));
         dlg.add(scroll, BorderLayout.CENTER);
-
+		
         // ── 필터 로직 (버튼 클릭 시) ─────────────────────────────
         JLabel countLabel = new JLabel("총 " + allItems.size() + "개");
         countLabel.setForeground(java.awt.Color.GRAY);
@@ -1630,7 +1638,7 @@ public class MenuBuilder {
         filterBtn.addActionListener(e -> applyFilter.run());
         // Enter 키로도 필터 실행
         filterField.addActionListener(e -> applyFilter.run());
-
+		
         // ── 하단: 확인 / 취소 ────────────────────────────────────
         final ItsCctvManager.CctvItem[] result = {null};
         JButton okBtn     = new JButton("  확인  ");
@@ -1656,7 +1664,7 @@ public class MenuBuilder {
 		});
         // Enter 키로 확인
         dlg.getRootPane().setDefaultButton(okBtn);
-
+		
         JPanel botPanel = new JPanel(new BorderLayout(6, 0));
         JPanel botRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 4));
         botRight.add(okBtn);
@@ -1664,13 +1672,13 @@ public class MenuBuilder {
         botPanel.add(countLabel, BorderLayout.WEST);
         botPanel.add(botRight, BorderLayout.EAST);
         dlg.add(botPanel, BorderLayout.SOUTH);
-
+		
         dlg.pack();
         dlg.setLocationRelativeTo(owner);
         dlg.setVisible(true);  // modal: 여기서 블록됨
         return result[0];
 	}
-
+	
     private JMenu buildKakaoMenu(JMenu kakaoMenu) {
         String kakaoLoginStatus = host.getKakaoAccessToken().isEmpty()
 		? "🔑 카카오 로그인..." : "✅ 카카오 로그인됨";
@@ -1681,7 +1689,7 @@ public class MenuBuilder {
 		});
         kakaoMenu.add(kakaoLoginItem);
         kakaoMenu.addSeparator();
-
+		
         JMenuItem kakaoSendItem = new JMenuItem("📱 나에게 메시지 보내기...");
         kakaoSendItem.addActionListener(e -> {
             if (host.getKakaoAccessToken().isEmpty()) {
@@ -1699,22 +1707,22 @@ public class MenuBuilder {
 		});
         kakaoMenu.add(kakaoSendItem);
         kakaoMenu.addSeparator();
-
+		
         JMenuItem kakaoGuideItem = new JMenuItem("📖 설정 안내...");
         kakaoGuideItem.addActionListener(e -> host.showKakaoGuide());
         kakaoMenu.add(kakaoGuideItem);
         return kakaoMenu;
 	}
-
+	
     // ── Gmail / Calendar 서브메뉴 ─────────────────────────────────
     private JMenu buildGmailCalendarMenu() {
         JMenu menu = new JMenu("📧 Gmail / Calendar");
-
+		
         // ① 지금 Gmail 보내기 (기존 기능 그대로)
         menu.add(buildSendGmailItem());
-
+		
         menu.addSeparator();
-
+		
         // ② Calendar 설정 안내 (블로그 열기)
         JMenuItem calGuide = new JMenuItem("📖 Calendar 설정 안내");
         calGuide.addActionListener(e -> {
@@ -1727,9 +1735,9 @@ public class MenuBuilder {
 			}
 		});
         menu.add(calGuide);
-
+		
         menu.addSeparator();
-
+		
         // ③~⑧ 구글 일정 조회 항목들
         menu.add(buildCalendarQueryItem("📅 [구글] 오늘 일정 조회",  "today"));
         menu.add(buildCalendarQueryItem("📅 [구글] 내일 일정 조회",  "tomorrow"));
@@ -1737,9 +1745,9 @@ public class MenuBuilder {
         menu.add(buildCalendarQueryItem("📅 [구글] 향후 7일 조회",   "next7"));
         menu.add(buildCalendarQueryItem("📅 [구글] 한달 일정 조회",  "month"));
         menu.add(buildCalendarQueryItem("📅 [구글] 지난 7일 조회",   "past7"));
-
+		
         menu.addSeparator();
-
+		
         // ⑨~⑭ 네이버 일정 조회 항목들
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 오늘 일정 조회",  "today"));
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 내일 일정 조회",  "tomorrow"));
@@ -1747,10 +1755,10 @@ public class MenuBuilder {
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 향후 7일 조회",   "next7"));
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 한달 일정 조회",  "month"));
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 지난 7일 조회",   "past7"));
-
+		
         return menu;
 	}
-
+	
     /** 일정 조회 메뉴 항목 생성 공통 메서드 */
     private JMenuItem buildCalendarQueryItem(String label, String mode) {
         JMenuItem item = new JMenuItem(label);
@@ -1771,7 +1779,7 @@ public class MenuBuilder {
                     java.time.LocalDate today = java.time.LocalDate.now();
                     java.time.format.DateTimeFormatter dateFmt =
 					java.time.format.DateTimeFormatter.ofPattern("M/d");
-
+					
                     switch (mode) {
                         case "today":
 						events = cal.getToday();
@@ -1804,18 +1812,18 @@ public class MenuBuilder {
 						events = java.util.Collections.emptyList();
 						title  = "일정";
 					}
-
+					
                     String msg = GoogleCalendarService.formatEvents(title, events);
-
+					
                     // 텔레그램 전송
                     TelegramBot tg = host.getTgForCalendar();
                     if (tg != null && tg.polling && !tg.myChatId.isEmpty()) {
                         tg.send(tg.myChatId, msg);
 					}
-
+					
                     // 카카오톡 전송
                     host.kakaoSend("📅 " + title, msg);
-
+					
                     // PC 팝업
                     final String finalMsg = msg;
                     final String finalTitle = title;
@@ -1835,7 +1843,7 @@ public class MenuBuilder {
 		});
         return item;
 	}
-
+	
     /** 네이버 일정 조회 메뉴 항목 생성 */
     private JMenuItem buildNaverCalendarQueryItem(String label, String mode) {
         JMenuItem item = new JMenuItem(label);
@@ -1858,7 +1866,7 @@ public class MenuBuilder {
                     java.time.LocalDate today = java.time.LocalDate.now();
                     java.time.format.DateTimeFormatter dateFmt =
 					java.time.format.DateTimeFormatter.ofPattern("M/d");
-
+					
                     switch (mode) {
                         case "today":
 						events = naver.getToday();
@@ -1891,18 +1899,18 @@ public class MenuBuilder {
 						events = java.util.Collections.emptyList();
 						title  = "네이버 일정";
 					}
-
+					
                     String msg = NaverCalendarService.formatEvents(title, events);
-
+					
                     // 텔레그램 전송
                     TelegramBot tg = host.getTgForCalendar();
                     if (tg != null && tg.polling && !tg.myChatId.isEmpty()) {
                         tg.send(tg.myChatId, msg);
 					}
-
+					
                     // 카카오톡 전송
                     host.kakaoSend("📅 " + title, msg);
-
+					
                     // PC 팝업
                     final String finalMsg   = msg;
                     final String finalTitle = title;
@@ -1922,31 +1930,31 @@ public class MenuBuilder {
 		});
         return item;
 	}
-
+	
     /** 일정 조회 결과를 텍스트 박스 + 확인 버튼으로 표시 */
     private void showCalendarResult(String title, String text) {
         JDialog dlg = new JDialog((java.awt.Frame) null, "📅 " + title, false);
         dlg.setLayout(new BorderLayout(8, 8));
         dlg.getRootPane().setBorder(
 		javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
+		
         JTextArea ta = new JTextArea(text, 20, 40);
         ta.setEditable(false);
         ta.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
         ta.setLineWrap(true);
         ta.setWrapStyleWord(true);
         dlg.add(new JScrollPane(ta), BorderLayout.CENTER);
-
+		
         JButton okBtn = new JButton("  확인  ");
         okBtn.addActionListener(ev -> dlg.dispose());
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         btnPanel.add(okBtn);
         dlg.add(btnPanel, BorderLayout.SOUTH);
-
+		
         host.prepareDialog(dlg);
         dlg.setVisible(true);
 	}
-
+	
     // ── Gmail 보내기 항목 (별도 메서드로 가독성 향상) ──────────────
     private JMenuItem buildSendGmailItem() {
         JMenuItem sendGmailItem = new JMenuItem("📧 지금 Gmail 보내기");
@@ -1958,26 +1966,26 @@ public class MenuBuilder {
 				JOptionPane.WARNING_MESSAGE);
                 return;
 			}
-
+			
             // 입력 서브 다이얼로그
             JPanel ip = new JPanel(new GridBagLayout());
             GridBagConstraints ig = new GridBagConstraints();
             ig.insets = new Insets(4, 4, 4, 4);
             ig.anchor = GridBagConstraints.WEST;
-
+			
             ig.gridx = 0; ig.gridy = 0;
             ip.add(new JLabel("수신자 이메일:"), ig);
             JTextField toField = new JTextField(20);
             toField.setText(!gmail.lastTo.isEmpty() ? gmail.lastTo : gmail.from);
             ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
             ip.add(toField, ig);
-
+			
             ig.gridx = 0; ig.gridy = 1; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
             ip.add(new JLabel("제목:"), ig);
             JTextField subjField = new JTextField("[끝판왕] 알림", 20);
             ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
             ip.add(subjField, ig);
-
+			
             ig.gridx = 0; ig.gridy = 2; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
             ip.add(new JLabel("내용:"), ig);
             JTextArea bodyArea = new JTextArea(4, 20);
@@ -1986,23 +1994,23 @@ public class MenuBuilder {
 			+ new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
             ig.gridx = 1; ig.fill = GridBagConstraints.BOTH; ig.weightx = 1; ig.weighty = 1;
             ip.add(new JScrollPane(bodyArea), ig);
-
+			
             if (JOptionPane.showConfirmDialog(host.getOwnerComponent(), ip,
 				"📧 지금 Gmail 보내기",
 				JOptionPane.OK_CANCEL_OPTION,
 			JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
-
+			
             String toAddr = toField.getText().trim();
             if (toAddr.isEmpty()) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(),
 				"수신자 이메일을 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
                 return;
 			}
-
+			
             sendGmailItem.setEnabled(false);
             final String subj = subjField.getText().trim();
             final String body = bodyArea.getText().trim();
-
+			
             new Thread(() -> {
                 try {
                     gmail.send(toAddr, subj, body);
@@ -2026,18 +2034,18 @@ public class MenuBuilder {
 		});
         return sendGmailItem;
 	}
-
+	
     // ═══════════════════════════════════════════════════════════
     //  HostContext 구현체 (KootPanKing 에서 이동)
     // ═══════════════════════════════════════════════════════════
     public static class ClockHostContext implements HostContext {
-
+		
         private final KootPanKing app;
-
+		
         public ClockHostContext(KootPanKing app) {
             this.app = app;
 		}
-
+		
         // ── 상태 읽기 ───────────────────────────────────────
         @Override public boolean     isAlwaysOnTop()  { return app.alwaysOnTop; }
         @Override public boolean     isShowDigital()  { return app.showDigital; }
@@ -2067,17 +2075,17 @@ public class MenuBuilder {
         @Override public boolean     checkAutoStart() { return AppRestarter.AutoStart.check(); }
         @Override public GmailSender getGmail()       { return app.gmail; }
         @Override public TelegramBot getTg()           { return app.tg; }
-
+		
         // ── Google Calendar ──────────────────────────────────────
         @Override public GoogleCalendarService getCalendarService() { return app.calendarService; }
         @Override public TelegramBot getTgForCalendar()             { return app.tg; }
         @Override public NaverCalendarService getNaverCalendarService() { return app.naverCalendarService; }
-
+		
         // ── 상태 쓰기 ───────────────────────────────────────
         @Override public void setAlwaysOnTop(boolean v)  { app.alwaysOnTop=v; app.setAlwaysOnTop(v); }
         @Override public void setShowDigital(boolean v)  { app.showDigital=v; }
         @Override public void setShowNumbers(boolean v)  { app.showNumbers=v; }
-        @Override public void setTheme(String v)         { app.theme=v; }
+		@Override public void setTheme(String v)         { app.theme=v; }
         @Override public void setOpacity(float v)        { app.opacity=v; try{app.setOpacity(v);}catch(Exception ignored){} }
         @Override public void setBgColor(Color v)        { app.bgColor=v; }
         @Override public String getBgImagePath()          { return app.bgImagePath != null ? app.bgImagePath : ""; }
@@ -2104,10 +2112,10 @@ public class MenuBuilder {
         @Override public void    setNeonMode(boolean v)  { app.neonMode=v; }
         @Override public boolean isNeonDigital()         { return app.neonDigital; }
         @Override public void    setNeonDigital(boolean v){ app.neonDigital=v; }
-
+		
         @Override public boolean isDigitalNoBg()          { return app.digitalNoBg; }
         @Override public void    setDigitalNoBg(boolean v){ app.digitalNoBg = v; app.saveConfig(); }
-
+		
 		@Override public void setTickColor(Color v)       { app.tickColor=v; }
         @Override public void setTickVisible(boolean v)   { app.tickVisible=v; }
         @Override public void setSecondVisible(boolean v) { app.secondVisible=v; }
@@ -2183,7 +2191,7 @@ public class MenuBuilder {
             app.gmail.sendShutdownNotice(() -> { AppLogger.close(); System.exit(0); });
 		}
         @Override public void confirmAndExit() { app.confirmAndExit(); }
-
+		
         // ── SlideShow ───────────────────────────────────────
         @Override public boolean isSlideRunning()    { return app.slideEnabled && !app.slideImages.isEmpty(); }
         @Override public boolean isSlideImagesEmpty(){ return app.slideImages.isEmpty(); }
@@ -2201,20 +2209,20 @@ public class MenuBuilder {
         @Override public void    loadCurrentSlideImage()  { app.loadCurrentSlideImage(); }
         @Override public void    advanceSlide(int d)      { app.advanceSlide(d); }
         @Override public void    showFolderChooser(JCheckBoxMenuItem item) { app.folderItemAction(item); }
-
+		
         // ── Global Cities ───────────────────────────────────
         @Override public String  getCityName() { return app.cityName; }
         @Override public java.util.Set<String> getActiveCityNames() {
             java.util.Set<String> names = new java.util.HashSet<>();
             for (KootPanKing child : KootPanKing.childInstances) {
                 names.add(child.cityName);
-            }
+			}
             return names;
-        }
+		}
         @Override public void    openCityInstance(String cn, java.time.ZoneId zone) {
             SwingUtilities.invokeLater(() -> new KootPanKing(app, cn, zone));
 		}
-
+		
         // ── Camera ───────────────────────────────────────────────
         @Override public boolean isCameraMode()           { return app.cameraMode; }
         @Override public boolean isCameraRunning()        { return app.camera != null && app.camera.isConnected(); }
@@ -2225,7 +2233,7 @@ public class MenuBuilder {
         // @Override public String  getCameraUrl()           { return app.config.getProperty("camera.url", app.cameraUrl); }
         @Override public String  getCameraUrl()           { return app.cameraUrl; }
         @Override public void    setCameraUrl(String url) { app.cameraUrl = url; }
-
+		
         // ── YouTube ──────────────────────────────────────────────
         @Override public boolean isYoutubeMode()            { return app.youtubeMode; }
         @Override public String  getYoutubeUrl()            { return app.youtubeUrl != null ? app.youtubeUrl : ""; }
@@ -2233,13 +2241,13 @@ public class MenuBuilder {
         @Override public void    startYoutube(String url)   { app.startYoutube(url); }
         @Override public void    stopYoutube()              { app.stopYoutube(); }
         @Override public java.awt.Color getDesktopColor()  { return app.getDesktopColor(); }
-
+		
         // ── ITS 교통 CCTV ────────────────────────────────────────
         @Override public ItsCctvManager getItsCctv()  { return app.getItsCctv(); }
         @Override public String getItsCctvApiKey()    { return app.itsCctv != null ? app.itsCctv.getApiKey() : ""; }
         @Override public void startItsCctv()          { app.startItsCctv(); }
         @Override public void stopItsCctv()           { app.stopItsCctv(); }
-
+		
         // ── Kakao ───────────────────────────────────────────
         @Override public String  getKakaoAccessToken()          { return app.kakao.kakaoAccessToken; }
         @Override public void    kakaoLogin()                   { if (!app.isChild) app.kakao.kakaoLogin(); }
@@ -2249,11 +2257,11 @@ public class MenuBuilder {
         @Override public void    prepareDialog(java.awt.Window dlg) { app.prepareDialog(dlg); }
         @Override public String  getLogFilePath()               { return AppLogger.getLogFilePath(); }
         @Override public String  getConfigFilePath()            { return KootPanKing.CONFIG_FILE; }
-
+		
         // ── UI 부모 컴포넌트 ────────────────────────────────
         @Override public Component getOwnerComponent() { return app; }
 	}
-
+	
     /** SplashWindow.ClockHostCallback 위임용 public 래퍼 */
     public JMenu buildGmailCalendarMenuPublic() {
         return buildGmailCalendarMenu();
@@ -2271,9 +2279,9 @@ public class MenuBuilder {
         m.add(h);
         return m;
 	}
-
+	
     // ── 만년달력 헬퍼 메서드 ──────────────────────────────────────
-
+	
     /**
 		* 기본 폴더(실행파일 옆)에서 calendar.html 을 찾아 기본 브라우저로 연다.
 		* 파일이 없으면 "[만년달력 갱신]을 먼저 실행하세요" 다이얼로그를 표시한다.
@@ -2293,7 +2301,7 @@ public class MenuBuilder {
 			"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 		}
 	}
-
+	
     /**
 		* GitHub 에서 Calendar.html 을 다운로드하여 기본 폴더에 calendar.html 로 저장한다.
 		* 사용자 확인(yes/no) 다이얼로그를 먼저 표시한다.
@@ -2303,11 +2311,11 @@ public class MenuBuilder {
             "임시 공휴일 추가 등 만년 달력을 자동 갱신합니다.",
 		"만년달력 갱신", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (choice != JOptionPane.YES_OPTION) return;
-
+		
         final String DOWNLOAD_URL =
 		"https://raw.githubusercontent.com/GarpsuKim/Calendar_Lunar_-_HTML/main/Calendar.html";
         final java.io.File destFile = getCalendarFile();
-
+		
         new Thread(() -> {
             try {
                 java.net.URL url = new java.net.URI(DOWNLOAD_URL).toURL();
@@ -2341,7 +2349,7 @@ public class MenuBuilder {
 			}
 		}, "CalendarUpdate").start();
 	}
-
+	
     /** 실행파일 옆 폴더의 calendar.html File 객체를 반환한다. */
     private java.io.File getCalendarFile() {
         java.io.File baseDir = null;
@@ -2355,5 +2363,5 @@ public class MenuBuilder {
         if (baseDir == null) baseDir = new java.io.File(".");
         return new java.io.File(baseDir, "calendar.html");
 	}
-
+	
 }  // MenuBuilder 닫는 괄호

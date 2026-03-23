@@ -743,10 +743,12 @@ public class KootPanKing extends JFrame {
 								animInterval = 0;
 								saveConfig();
 							}
+							/*
 							if (rainbowActive) {
 								stopShowTimer();
 								saveConfig();
 							}
+							*/
 							if (cameraMode) captureCamera();
 						});
 						t.setRepeats(false);
@@ -1652,9 +1654,26 @@ public class KootPanKing extends JFrame {
         cameraFrame = null;
         if (clockPanel != null) clockPanel.repaint();
 	}
-	
     /** 실행 파일 경로 탐색: APP_DIR → PATH */
     private String resolveExe(String exeName) {
+        // ① JAR 실행 폴더
+        File f = new File(APP_DIR, exeName);
+        if (f.exists()) return f.getAbsolutePath();
+        // ② tools\ 서브폴더 (ToolManager 다운로드 위치)
+        File t = new File(APP_DIR + "tools", exeName);
+        if (t.exists()) return t.getAbsolutePath();
+        // ③ PATH
+        String path = System.getenv("PATH");
+        if (path != null) {
+            for (String dir : path.split(File.pathSeparator)) {
+                File candidate = new File(dir, exeName);
+                if (candidate.exists()) return candidate.getAbsolutePath();
+            }
+        }
+        return exeName;
+    }	
+    /** 실행 파일 경로 탐색: APP_DIR → PATH */
+    private String resolveExe___(String exeName) {
         File f = new File(APP_DIR, exeName);
         if (f.exists()) return f.getAbsolutePath();
         String path = System.getenv("PATH");
@@ -2061,7 +2080,7 @@ public class KootPanKing extends JFrame {
             trayPopup.addSeparator();
 			
             // 카카오톡 보내기
-            MenuItem trayKakaoItem = new MenuItem("📱 카카오톡 보내기...");
+            MenuItem trayKakaoItem = new MenuItem("📱 카카오톡 보내기...");			
             trayKakaoItem.addActionListener(e -> {
                 if (kakao.kakaoAccessToken.isEmpty()) {
 					prepareMessageBox();
@@ -2076,11 +2095,13 @@ public class KootPanKing extends JFrame {
                     new Thread(() -> kakao.sendKakao("📱 [끝판왕] 시계", msg.trim()), "KakaoSend").start();
 				}
 			});
+			trayKakaoItem.setEnabled(false);   // ← 이 줄 추가
             trayPopup.add(trayKakaoItem);
 			
             // 텔레그램 보내기
             MenuItem trayTelegramItem = new MenuItem("✈️ 텔레그램 보내기...");
             trayTelegramItem.addActionListener(e -> showTelegramDialog());
+			trayTelegramItem.setEnabled(false);   // ← 추가
             trayPopup.add(trayTelegramItem);
 			
             trayPopup.addSeparator();
@@ -2407,7 +2428,7 @@ public class KootPanKing extends JFrame {
     /** ini 파일이 없을 때 GitHub에서 기본 설정 파일을 다운로드 */
     private void downloadDefaultConfig(File destFile) {
         final String DEFAULT_INI_URL =
-		"https://raw.githubusercontent.com/GarpsuKim/KootPanKing/refs/heads/main/clock_settings_default.ini";
+		"https://raw.githubusercontent.com/GarpsuKim/KootPanKing/refs/heads/main/INI_bak/clock_settings_default.ini";
 		System.out.println("[Config] 기본 설정 파일 다운로드 시도: " + DEFAULT_INI_URL);
         try {
             java.net.URL url = new java.net.URI(DEFAULT_INI_URL).toURL();
@@ -2726,6 +2747,7 @@ public class KootPanKing extends JFrame {
 		AppLogger.init();   // ★ 로거 초기화 - 가장 먼저 실행
         System.out.println("[ " + thisProgramName + " ] [main] start");
         AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 시작");
+        ToolManager.init(); // ★ yt-dlp / ffmpeg 준비 (백그라운드)
         try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
         catch (Exception ignored) {}
 		
