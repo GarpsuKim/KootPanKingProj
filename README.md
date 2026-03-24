@@ -1,3 +1,5 @@
+<img width="645" height="859" alt="image" src="https://github.com/user-attachments/assets/2dc1d594-b4a7-4886-a006-2dd0de7d6cdf" />
+
 ⚠️ Windows 보안 경고 해결 방법
 
 이 프로그램은 개인 개발자 [김갑수 , garpsu@naver.com ]가 Java로 개발하여 배포한 EXE 파일입니다.
