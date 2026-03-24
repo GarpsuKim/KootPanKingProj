@@ -25,8 +25,9 @@ public class KootPanKing extends JFrame {
     private Properties config = new Properties();
 	
     // ── 설정 파일 저장 폴더 결정 (우선순위 3단계) ─────────────────
-    private static final String APP_DIR     = resolveAppDir();
-    static final String CONFIG_FILE = APP_DIR + "clock_settings.ini";
+    private static final String APP_DIR      = resolveAppDir();
+    static final String SETTINGS_DIR = APP_DIR + "settings" + File.separator;
+    static final String CONFIG_FILE  = SETTINGS_DIR + "clock_settings.ini";
 	
     // ── 인스턴스별 설정 파일 경로 및 자식 여부 ─────────────────────
     // 기본 인스턴스 : clock_settings.ini  (CONFIG_FILE 과 동일)
@@ -53,7 +54,9 @@ public class KootPanKing extends JFrame {
 			} catch (Exception ignored) {}
 		}
         // 기존 설정 파일이 JAR 옆에 있으면 → 무조건 JAR 폴더 사용 (설정 유지)
-        if (jarDir != null && new File(jarDir, "clock_settings.ini").exists()) {
+        if (jarDir != null && (
+                new File(jarDir, "settings" + File.separator + "clock_settings.ini").exists() ||
+                new File(jarDir, "clock_settings.ini").exists())) {
             System.out.println("[AppDir] 기존 설정 발견 → JAR 폴더: " + jarDir.getAbsolutePath());
             return jarDir.getAbsolutePath() + File.separator;
 		}
@@ -70,6 +73,11 @@ public class KootPanKing extends JFrame {
         System.out.println("[AppDir] APPDATA 폴더 사용: " + dir.getAbsolutePath());
         return dir.getAbsolutePath() + File.separator;
 	}
+
+    private static void ensureSettingsDir() {
+        java.io.File s = new java.io.File(SETTINGS_DIR);
+        if (!s.exists()) s.mkdirs();
+    }
 	
     // ── Settings ---─────
     boolean startHidden   = false;  // 트레이 아이콘 상태로 시작
@@ -265,7 +273,7 @@ public class KootPanKing extends JFrame {
         // ── 자식 플래그 및 전용 ini 경로 결정 ────────────────
         isChild = true;
         String safeName = newCityName.replaceAll("[^a-zA-Z0-9_\\-]", "_");
-        myConfigFile = APP_DIR + "clock_settings_" + safeName + ".ini";
+        myConfigFile = SETTINGS_DIR + "clock_settings_" + safeName + ".ini";
 		
         if (new File(myConfigFile).exists()) {
             // ── 자기 ini 가 있으면 → 부모 무시, ini 에서 직접 로드 ──
@@ -551,7 +559,7 @@ public class KootPanKing extends JFrame {
         applyChimeConfig(); // loadConfig() 에서 임시 보관한 chime 설정 적용
         // AlarmController 초기화
         alarmController = new AlarmController(
-            this, APP_DIR + "alarms.dat",
+            this, SETTINGS_DIR + "alarms.dat",
             push, gmail, kakao, tg,
             new AlarmController.HostCallback() {
                 @Override public String  getChimeFile()   { return chimeController.getFile(); }
@@ -661,7 +669,9 @@ public class KootPanKing extends JFrame {
 		);
         alarmController.loadAlarms();
         initUI(null);
-        tg.kakao = kakao;          // 카카오 미러링 주입
+        tg.kakao   = kakao;          // 카카오 미러링 주입
+        tg.appDir  = APP_DIR;        // APP_DIR 주입 — txt/ini 경로 기준
+        kakao.appDir = APP_DIR;      // APP_DIR 주입 — txt/ini 경로 기준
         kakao.onTokenSaved = this::saveConfig; // 로그인 성공 시 refresh_token ini 저장
         // 카카오 자동 로그인 후 시작 알림 전송
         // - 카카오 로그인 완료 후 tg.sendStartupNotice() 해야 미러링이 동작함
@@ -1492,7 +1502,7 @@ public class KootPanKing extends JFrame {
 	
     /**
 		* yt-dlp 로 실제 스트림 URL 추출 → ffmpeg 파이프로 프레임 읽기.
-		* yt-dlp.exe / ffmpeg.exe 는 실행 폴더(APP_DIR) 또는 PATH 에 있어야 함.
+		* yt-dlp.exe / ffmpeg.exe 는 APP_DIR/tools/ 또는 PATH 에 있어야 함.
 		* YouTube URL → yt-dlp 로 실제 스트림 URL 추출 후 ffmpeg 캡처
 		* 그 외 직접 URL (RTSP, MJPEG, HLS, 일반 HTTP 스트림 등) → ffmpeg 직접 캡처
 	*/
@@ -1656,10 +1666,7 @@ public class KootPanKing extends JFrame {
 	}
     /** 실행 파일 경로 탐색: APP_DIR → PATH */
     private String resolveExe(String exeName) {
-        // ① JAR 실행 폴더
-        File f = new File(APP_DIR, exeName);
-        if (f.exists()) return f.getAbsolutePath();
-        // ② tools\ 서브폴더 (ToolManager 다운로드 위치)
+        // tools\ 폴더 (APP_DIR 직속, log\ 와 형제)
         File t = new File(APP_DIR + "tools", exeName);
         if (t.exists()) return t.getAbsolutePath();
         // ③ PATH
@@ -1674,7 +1681,7 @@ public class KootPanKing extends JFrame {
     }	
     /** 실행 파일 경로 탐색: APP_DIR → PATH */
     private String resolveExe___(String exeName) {
-        File f = new File(APP_DIR, exeName);
+        File f = new File(APP_DIR + "tools", exeName);
         if (f.exists()) return f.getAbsolutePath();
         String path = System.getenv("PATH");
         if (path != null) {
@@ -2155,7 +2162,7 @@ public class KootPanKing extends JFrame {
 	
     void showAbout() {
         StringBuilder sb = new StringBuilder();
-        File f = new File("about.txt");
+        File f = new File(APP_DIR, "about.txt");
         if (f.exists()) {
             try (BufferedReader br = new BufferedReader(
 			new InputStreamReader(new FileInputStream(f), "UTF-8"))) {
@@ -2245,6 +2252,23 @@ public class KootPanKing extends JFrame {
     // ═══════════════════════════════════════════════════════════
     private void loadConfig() {
         File f = new File(myConfigFile);
+        // ── 구버전 호환: APP_DIR 루트에 ini 가 있으면 settings/ 로 자동 이동 ──
+        if (!isChild) {
+            File oldIni = new File(APP_DIR + "clock_settings.ini");
+            if (oldIni.exists() && !oldIni.getAbsolutePath().equals(f.getAbsolutePath())) {
+                oldIni.renameTo(f);
+                System.out.println("[Config] clock_settings.ini → settings/ 로 이동 완료");
+            }
+        } else {
+            String safeName = cityName != null ? cityName.replaceAll("[^a-zA-Z0-9_\\-]", "_") : "";
+            if (!safeName.isEmpty()) {
+                File oldChild = new File(APP_DIR + "clock_settings_" + safeName + ".ini");
+                if (oldChild.exists() && !oldChild.getAbsolutePath().equals(f.getAbsolutePath())) {
+                    oldChild.renameTo(f);
+                    System.out.println("[Config] " + oldChild.getName() + " → settings/ 로 이동 완료");
+                }
+            }
+        }
         System.out.println("[Config] 경로: " + f.getAbsolutePath());
         if (!f.exists()) {
             // 기본 인스턴스만 GitHub 에서 다운로드 (자식은 존재 확인 후 호출되므로 여기 오지 않음)
@@ -2718,7 +2742,7 @@ public class KootPanKing extends JFrame {
 	private static boolean acquireSingleInstanceLock() {
 		try {
 			java.io.File lockFile = new java.io.File(
-			System.getProperty("user.dir"), "KootPanKing.lock");
+			SETTINGS_DIR, "KootPanKing.lock");
 			lockChannel = new java.io.RandomAccessFile(lockFile, "rw").getChannel();
 			instanceLock = lockChannel.tryLock();
 			if (instanceLock == null) {
@@ -2745,9 +2769,10 @@ public class KootPanKing extends JFrame {
 		}
 		
 		AppLogger.init();   // ★ 로거 초기화 - 가장 먼저 실행
+        ensureSettingsDir(); // ★ settings 폴더 생성
         System.out.println("[ " + thisProgramName + " ] [main] start");
         AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 시작");
-        ToolManager.init(); // ★ yt-dlp / ffmpeg 준비 (백그라운드)
+        ToolManager.init(APP_DIR); // ★ yt-dlp / ffmpeg 준비 (백그라운드)
         try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
         catch (Exception ignored) {}
 		

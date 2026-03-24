@@ -5,13 +5,14 @@ import java.util.zip.*;
 
 public class ToolManager {
 
-    private static final String TOOLS_DIR =
-        System.getProperty("user.dir") + File.separator + "tools";
+    private static String TOOLS_DIR; // APP_DIR 하위 tools\ 폴더 (log\ 와 형제)
 
     // =========================
     // 진입점 — 반드시 백그라운드 스레드에서 호출
     // =========================
-    public static void init() {
+    public static void init(String appDir) {
+        // tools\ 폴더는 appDir 직속 하위 (log\ 와 같은 레벨)
+        TOOLS_DIR = appDir + "tools";
         new Thread(() -> {
             try {
                 Files.createDirectories(Paths.get(TOOLS_DIR));

@@ -15,6 +15,9 @@ import java.util.regex.Pattern;
 
 public class Kakao {
 	
+	// ── 실행 폴더 (KootPanKing.APP_DIR 주입) ────────────────────
+	String appDir = "";  // KootPanKing 생성 시 APP_DIR 주입
+
 	// ── 카카오톡 ────────────────────────────────────────────────
 	private static final String KAKAO_REDIRECT = "http://localhost:8080/callback";
 
@@ -34,15 +37,8 @@ public class Kakao {
     /** Kakao.txt 를 HTML 로 변환하여 기본 브라우저로 표시 */
     void showKakaoGuide() {
         try {
-            // Kakao.txt 경로: 실행 파일 옆 또는 현재 디렉토리
-            File txtFile = new File("Kakao.txt");
-            if (!txtFile.exists()) {
-                try {
-                    File jar = new File(Kakao.class.getProtectionDomain()
-					.getCodeSource().getLocation().toURI());
-                    txtFile = new File(jar.getParent(), "Kakao.txt");
-				} catch (Exception ignored) {}
-			}
+            // Kakao.txt 경로: APP_DIR 기준
+            File txtFile = new File(appDir.isEmpty() ? "." : appDir, "Kakao.txt");
 			
             String content = "";
             if (txtFile.exists()) {

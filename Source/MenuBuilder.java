@@ -919,7 +919,7 @@ public class MenuBuilder {
             host.getOwnerComponent(),
             "【 스트림 배경 사용 방법 】\n\n" +
             "■ youTubeCctv.ini 즐겨찾기\n" +
-            "  프로그램 실행 폴더에 youTubeCctv.ini 파일 생성:\n" +
+            "  settings 폴더에 youTubeCctv.ini 파일 생성:\n" +
             "  [이름]URL 형식으로 한 줄씩 입력\n" +
             "  예) [시드니]https://www.youtube.com/live/XXXX\n\n" +
             "■ YouTube (yt-dlp.exe + ffmpeg.exe 필요)\n" +
@@ -950,7 +950,7 @@ public class MenuBuilder {
                 java.net.URL dlUrl = java.net.URI.create(
 				"https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/INI_bak/youTubeCctv.ini").toURL();
                 java.nio.file.Path dest = java.nio.file.Paths.get(
-				System.getProperty("user.dir"), "youTubeCctv.ini");
+					new java.io.File(host.getConfigFilePath()).getParent(), "youTubeCctv.ini");
                 try (java.io.InputStream in = dlUrl.openStream()) {
                     java.nio.file.Files.copy(in, dest,
 					java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -993,26 +993,17 @@ public class MenuBuilder {
 	*/
     private java.util.List<String[]> loadStreamIni() {
         java.util.List<String[]> list = new java.util.ArrayList<>();
-		
-        // 실행 폴더 기준으로 탐색
-        java.io.File iniFile = null;
-        try {
-            java.security.CodeSource cs =
-			MenuBuilder.class.getProtectionDomain().getCodeSource();
-            if (cs != null) {
-                java.io.File jarDir = new java.io.File(cs.getLocation().toURI()).getParentFile();
-                iniFile = new java.io.File(jarDir, "youTubeCctv.ini");
-			}
-		} catch (Exception ignored) {}
-		
-        if (iniFile == null || !iniFile.exists())
-		iniFile = new java.io.File("youTubeCctv.ini");
-		
+
+        // settings/ 폴더 기준 (KootPanKing.CONFIG_FILE 과 같은 폴더)
+        java.io.File appDir  = new java.io.File(host.getConfigFilePath()).getParentFile();
+        java.io.File iniFile = new java.io.File(appDir, "youTubeCctv.ini");
+        System.out.println("[StreamIni] 탐색 경로: " + iniFile.getAbsolutePath());
+
         // 파일 없으면 GitHub 에서 다운로드
         if (!iniFile.exists()) {
             System.out.println("[StreamIni] 파일 없음 → GitHub 다운로드 시도");
             downloadStreamIni(iniFile);
-		}
+        }
 		
         if (!iniFile.exists()) {
             System.out.println("[StreamIni] 다운로드 실패 — 목록 없음");
@@ -2352,14 +2343,7 @@ public class MenuBuilder {
 	
     /** 실행파일 옆 폴더의 calendar.html File 객체를 반환한다. */
     private java.io.File getCalendarFile() {
-        java.io.File baseDir = null;
-        try {
-            java.security.CodeSource cs =
-			MenuBuilder.class.getProtectionDomain().getCodeSource();
-            if (cs != null) {
-                baseDir = new java.io.File(cs.getLocation().toURI()).getParentFile();
-			}
-		} catch (Exception ignored) {}
+        java.io.File baseDir = new java.io.File(host.getConfigFilePath()).getParentFile();
         if (baseDir == null) baseDir = new java.io.File(".");
         return new java.io.File(baseDir, "calendar.html");
 	}

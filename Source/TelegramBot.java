@@ -61,6 +61,7 @@ public class TelegramBot {
     public String  botToken  = "";  // BotFather 에서 발급받은 Bot Token
     public String  myChatId  = "";  // 허용된 Chat ID (보안) - 비어있으면 전체 허용
     public volatile boolean polling = false; // 폴링 활성화 여부
+    public String  appDir    = "";  // KootPanKing.APP_DIR 주입 — txt/ini 파일 경로 기준
     // ── 내부 상태 ─────────────────────────────────────────────────
     private volatile long   lastUpdateId = 0;  // 마지막 처리한 update_id
     private Timer           pollTimer    = null; // EDT 전용 타이머
@@ -1554,18 +1555,8 @@ public class TelegramBot {
     // ── 텔레그램 안내 HTML 파일 열기 ─────────────────────────────
     public void showTelegramHelp(java.awt.Component parent) {
         try {
-            // TELEGRAM_help.txt 탐색: 실행 파일 옆 폴더 우선
-            java.io.File txtFile = new java.io.File("TELEGRAM_help.txt");
-            if (!txtFile.exists()) {
-                try {
-                    java.security.CodeSource cs = getClass().getProtectionDomain().getCodeSource();
-                    if (cs != null) {
-                        java.io.File base = new java.io.File(cs.getLocation().toURI());
-                        java.io.File dir  = base.isDirectory() ? base : base.getParentFile();
-                        txtFile = new java.io.File(dir, "TELEGRAM_help.txt");
-                    }
-                } catch (Exception ignored) {}
-            }
+            // TELEGRAM_help.txt 경로: APP_DIR 기준
+            java.io.File txtFile = new java.io.File(appDir.isEmpty() ? "." : appDir, "TELEGRAM_help.txt");
 
             String content;
             if (txtFile.exists()) {

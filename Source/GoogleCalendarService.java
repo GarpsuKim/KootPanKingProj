@@ -33,8 +33,8 @@ import org.json.simple.parser.JSONParser;
 public class GoogleCalendarService {
 
     // ── 상수 ──────────────────────────────────────────────────────
-    private static final String CREDENTIALS_FILE = "credentials.json";
-    private static final String TOKEN_FILE        = "tokens/token.json";
+    private static final String CREDENTIALS_FILE = "settings/credentials.json";
+    private static final String TOKEN_FILE        = "settings/token.json";
     private static final String REDIRECT_URI      = "http://localhost:8888/Callback";
     private static final String SCOPE             = "https://www.googleapis.com/auth/calendar.readonly";
     private static final String TOKEN_URL         = "https://oauth2.googleapis.com/token";
@@ -96,9 +96,9 @@ public class GoogleCalendarService {
     /**
      * credentials.json 준비 여부 확인 + 자동 복사.
      *
-     * 1) 실행 폴더에 credentials.json 이 있으면 → true
+     * 1) settings/credentials.json 이 있으면 → true
      * 2) 없으면 C:\temp\credentials.json 확인
-     *    → 있으면 실행 폴더로 복사 후 true
+     *    → 있으면 settings/ 폴더로 복사 후 true
      *    → 없으면 false (로그인 생략)
      */
     public static boolean credentialsExist() {
