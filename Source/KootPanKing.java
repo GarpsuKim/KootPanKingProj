@@ -55,10 +55,10 @@ public class KootPanKing extends JFrame {
 		}
         // 기존 설정 파일이 JAR 옆에 있으면 → 무조건 JAR 폴더 사용 (설정 유지)
         if (jarDir != null && (
-                new File(jarDir, "settings" + File.separator + "clock_settings.ini").exists() ||
-                new File(jarDir, "clock_settings.ini").exists())) {
-            System.out.println("[AppDir] 기존 설정 발견 → JAR 폴더: " + jarDir.getAbsolutePath());
-            return jarDir.getAbsolutePath() + File.separator;
+			new File(jarDir, "settings" + File.separator + "clock_settings.ini").exists() ||
+		new File(jarDir, "clock_settings.ini").exists())) {
+		System.out.println("[AppDir] 기존 설정 발견 → JAR 폴더: " + jarDir.getAbsolutePath());
+		return jarDir.getAbsolutePath() + File.separator;
 		}
         // JAR 폴더에 쓰기 가능하면 사용
         if (jarDir != null && jarDir.canWrite()) {
@@ -73,11 +73,11 @@ public class KootPanKing extends JFrame {
         System.out.println("[AppDir] APPDATA 폴더 사용: " + dir.getAbsolutePath());
         return dir.getAbsolutePath() + File.separator;
 	}
-
+	
     private static void ensureSettingsDir() {
         java.io.File s = new java.io.File(SETTINGS_DIR);
         if (!s.exists()) s.mkdirs();
-    }
+	}
 	
     // ── Settings ---─────
     boolean startHidden   = false;  // 트레이 아이콘 상태로 시작
@@ -734,13 +734,18 @@ public class KootPanKing extends JFrame {
 				}
 			*/
 			@Override public void mouseClicked(MouseEvent e) {
-				if (e.getClickCount() == 2) {
-					// 싱글클릭 타이머가 있으면 취소
+				if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
+					// 좌클릭 더블: 싱글클릭 타이머 취소 후 팝업 메뉴 표시
 					Object prev = clockPanel.getClientProperty("singleClickTimer");
 					if (prev instanceof javax.swing.Timer) ((javax.swing.Timer) prev).stop();
 					showPopup(e);
-					} else if (e.getClickCount() == 1) {
-					// 싱글클릭: animation 진행 중이면 해제, 무지개 진행 중이면 중단
+					} else if (e.getClickCount() == 2 && SwingUtilities.isRightMouseButton(e)) {
+					// 우클릭 더블: MainWindow(SplashWindow) 로드
+					Object prev = clockPanel.getClientProperty("singleClickTimer");
+					if (prev instanceof javax.swing.Timer) ((javax.swing.Timer) prev).stop();
+					showMainWindowManual();
+					} else if (e.getClickCount() == 1 && SwingUtilities.isLeftMouseButton(e)) {
+					// 좌클릭 싱글: animation 진행 중이면 해제, 카메라 캡처
 					boolean animActive   = (animTimer  != null && animTimer.isRunning());
 					boolean rainbowActive = (showTimer != null && showTimer.isRunning());
 					if (animActive || rainbowActive || cameraMode) {
@@ -754,10 +759,10 @@ public class KootPanKing extends JFrame {
 								saveConfig();
 							}
 							/*
-							if (rainbowActive) {
+								if (rainbowActive) {
 								stopShowTimer();
 								saveConfig();
-							}
+								}
 							*/
 							if (cameraMode) captureCamera();
 						});
@@ -767,6 +772,7 @@ public class KootPanKing extends JFrame {
 					}
 				}
 			}
+
 			private void showPopup(MouseEvent e) {
                 buildPopupMenu();
                 popupMenu.show(clockPanel, e.getX(), e.getY());
@@ -1675,10 +1681,10 @@ public class KootPanKing extends JFrame {
             for (String dir : path.split(File.pathSeparator)) {
                 File candidate = new File(dir, exeName);
                 if (candidate.exists()) return candidate.getAbsolutePath();
-            }
-        }
+			}
+		}
         return exeName;
-    }	
+	}	
     /** 실행 파일 경로 탐색: APP_DIR → PATH */
     private String resolveExe___(String exeName) {
         File f = new File(APP_DIR + "tools", exeName);
@@ -2258,17 +2264,17 @@ public class KootPanKing extends JFrame {
             if (oldIni.exists() && !oldIni.getAbsolutePath().equals(f.getAbsolutePath())) {
                 oldIni.renameTo(f);
                 System.out.println("[Config] clock_settings.ini → settings/ 로 이동 완료");
-            }
-        } else {
+			}
+			} else {
             String safeName = cityName != null ? cityName.replaceAll("[^a-zA-Z0-9_\\-]", "_") : "";
             if (!safeName.isEmpty()) {
                 File oldChild = new File(APP_DIR + "clock_settings_" + safeName + ".ini");
                 if (oldChild.exists() && !oldChild.getAbsolutePath().equals(f.getAbsolutePath())) {
                     oldChild.renameTo(f);
                     System.out.println("[Config] " + oldChild.getName() + " → settings/ 로 이동 완료");
-                }
-            }
-        }
+				}
+			}
+		}
         System.out.println("[Config] 경로: " + f.getAbsolutePath());
         if (!f.exists()) {
             // 기본 인스턴스만 GitHub 에서 다운로드 (자식은 존재 확인 후 호출되므로 여기 오지 않음)
@@ -2604,22 +2610,22 @@ public class KootPanKing extends JFrame {
         JLabel msgLabel = new JLabel("이 시계 창을 닫으시겠습니까?" + cityLabel);
         msgLabel.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
         msgLabel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-
+		
         JPanel msgPanel = new JPanel(new BorderLayout());
         msgPanel.add(new JLabel(UIManager.getIcon("OptionPane.questionIcon")), BorderLayout.WEST);
         msgPanel.add(msgLabel, BorderLayout.CENTER);
-
+		
         JButton yesBtn = new JButton("Yes");
         JButton noBtn  = new JButton("No");
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         btnPanel.add(yesBtn);
         btnPanel.add(noBtn);
-
+		
         JPanel root = new JPanel(new BorderLayout(0, 8));
         root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         root.add(msgPanel, BorderLayout.CENTER);
         root.add(btnPanel, BorderLayout.SOUTH);
-
+		
         JDialog dlg = new JDialog((Frame) null, "Close 확인" + cityLabel, true);
         dlg.setContentPane(root);
         dlg.pack();
@@ -2863,6 +2869,23 @@ public class KootPanKing extends JFrame {
 			@Override public javax.swing.JMenu buildTelegramMenu() {
 				return new MenuBuilder(new MenuBuilder.ClockHostContext(clock))
 				.buildTelegramMenuPublic();
+			}
+			@Override public String getConfig(String key, String defaultValue) {
+				return clock.config.getProperty(key, defaultValue);
+			}
+			@Override public void setConfigAndSave(String key, String value) {
+				if (value == null || value.isEmpty()) clock.config.remove(key);
+				else clock.config.setProperty(key, value);
+				clock.saveConfig();
+			}
+			@Override public void setMultipleConfigAndSave(String... entries) {
+				for (int i = 0; i + 1 < entries.length; i += 2) {
+					String key   = entries[i];
+					String value = entries[i + 1];
+					if (value == null || value.isEmpty()) clock.config.remove(key);
+					else clock.config.setProperty(key, value);
+				}
+				clock.saveConfig(); // 파일 I/O 1회
 			}
 		});
         splash.log("시계 초기화 완료.");

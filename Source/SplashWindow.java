@@ -107,6 +107,24 @@ public class SplashWindow extends JFrame {
 		
         /** 도구 → 텔레그램 서브메뉴 */
         JMenu buildTelegramMenu();
+
+        /** ini config 값 읽기 (key 없으면 defaultValue 반환) */
+        String getConfig(String key, String defaultValue);
+
+        /**
+         * ini config 값 여러 개를 한 번에 쓰고 파일 저장.
+         * 기존 setConfigAndSave(key, value) 를 두 번 호출하면 파일을 두 번 쓰는 문제를
+         * 해결하기 위해 추가. 구현체에서 모든 값을 메모리에 반영한 뒤 파일을 1회만 저장한다.
+         *
+         * @param entries  [key, value] 쌍의 가변 인자 (반드시 짝수 개)
+         */
+        void setMultipleConfigAndSave(String... entries);
+
+        /**
+         * ini config 값 1개 쓰기 + 파일 저장 (하위 호환용).
+         * 2개 이상 저장 시에는 setMultipleConfigAndSave 를 사용할 것.
+         */
+        void setConfigAndSave(String key, String value);
 	}
     // ═══════════════════════════════════════════════════════════
     //  생성자
@@ -237,6 +255,7 @@ public class SplashWindow extends JFrame {
         bar.add(buildGlobalMenu());
         bar.add(buildToolsMenu());
         bar.add(buildLifeMenu());
+        bar.add(buildOfficeMenu());
         bar.add(buildHelpMenu());
         return bar;
 	}
@@ -486,9 +505,307 @@ public class SplashWindow extends JFrame {
 		
         return fileMenu;
 	}
-	
-    // ── [Help] 메뉴 ──────────────────────────────────────────────
-	
+
+    // ═══════════════════════════════════════════════════════════
+    //  [업무도구] 메뉴 — 사용자 슬롯 등록/수정/삭제/순서변경
+    //
+    //  ★ 설계 원칙 ★
+    //  JMenuItem 위에서 MouseListener 로 우클릭을 잡는 방식은
+    //  Swing 의 MenuSelectionManager 가 마우스 이벤트를 가로채기 때문에
+    //  원천적으로 동작하지 않는다.
+    //
+    //  해결책: 각 슬롯을 JMenu(서브메뉴) 로 만들고,
+    //  그 안에 "▶ 실행 / ✏️ 수정 / 🗑️ 삭제 / ⬆️ 위로 / ⬇️ 아래로" 항목을 배치.
+    //  등록 안 된 슬롯은 "➕ 등록" 하나만 넣는다.
+    //  모든 동작이 일반 ActionListener 로 처리되므로 완전히 안정적.
+    // ═══════════════════════════════════════════════════════════
+
+    private static final int OFFICE_SLOT_COUNT = 20;
+
+    private static String slotNameKey(int i) { return "office.slot." + i + ".name"; }
+    private static String slotPathKey(int i) { return "office.slot." + i + ".path"; }
+
+    private JMenu buildOfficeMenu() {
+        JMenu officeMenu = makeMenu("업무도구");
+
+        // ── 고정 3종 (레지스트리 자동 연결) ──────────────────────────
+        String[][] fixed = {
+            { "📊 Excel",  "excel.exe"    },
+            { "📝 Word",   "winword.exe"  },
+            { "📑 PPT",    "powerpnt.exe" },
+        };
+        for (String[] app : fixed) {
+            String label   = app[0];
+            String exeName = app[1];
+            JMenuItem item = makeMenuItem(label, exeName + " 실행");
+            item.addActionListener(e -> launchByRegistry(exeName));
+            officeMenu.add(item);
+        }
+
+        officeMenu.addSeparator();
+
+        // ── 사용자 슬롯 20개 (각 슬롯 = JMenu 서브메뉴) ──────────────
+        for (int i = 0; i < OFFICE_SLOT_COUNT; i++) {
+            officeMenu.add(buildSlotMenu(i));
+        }
+
+        return officeMenu;
+    }
+
+    /**
+     * 슬롯 하나를 JMenu(서브메뉴) 로 생성한다.
+     *
+     * 등록된 슬롯  : "📌 앱이름 ▶"  → [▶ 실행] [──] [✏️ 수정] [🗑️ 삭제] [──] [⬆️ 위로] [⬇️ 아래로]
+     * 미등록 슬롯  : "── 빈 슬롯 N ── ▶"  → [➕ 등록]
+     *
+     * JMenuItem 위 MouseListener 우클릭 방식은 Swing MenuSelectionManager 가
+     * 이벤트를 가로채므로 원천적으로 동작하지 않는다.
+     * JMenu 서브메뉴 방식은 표준 ActionListener 만 사용하므로 완전히 안정적이다.
+     */
+    private JMenu buildSlotMenu(int idx) {
+        String name = (clockHost != null) ? clockHost.getConfig(slotNameKey(idx), "") : "";
+        String path = (clockHost != null) ? clockHost.getConfig(slotPathKey(idx), "") : "";
+        boolean reg = !name.isEmpty() && !path.isEmpty();
+
+        JMenu slotMenu = makeMenu(reg ? "📌 " + name : "── 빈 슬롯 " + (idx + 1) + " ──");
+        if (reg) slotMenu.setToolTipText(path);
+
+        if (reg) {
+            // ── ▶ 실행 ───────────────────────────────────────────
+            JMenuItem runItem = makeMenuItem("▶  실행", path);
+            final String p = path;
+            runItem.addActionListener(e -> launchByPath(p));
+            slotMenu.add(runItem);
+
+            slotMenu.addSeparator();
+
+            // ── ✏️ 수정 ───────────────────────────────────────────
+            JMenuItem editItem = makeMenuItem("✏️  수정", null);
+            editItem.addActionListener(e -> openSlotEditor(idx));
+            slotMenu.add(editItem);
+
+            // ── 🗑️ 삭제 ───────────────────────────────────────────
+            JMenuItem delItem = makeMenuItem("🗑️  삭제", null);
+            delItem.addActionListener(e -> deleteSlot(idx, name));
+            slotMenu.add(delItem);
+
+            slotMenu.addSeparator();
+
+            // ── ⬆️ 위로 이동 ──────────────────────────────────────
+            JMenuItem upItem = makeMenuItem("⬆️  위로 이동", null);
+            upItem.setEnabled(idx > 0);
+            upItem.addActionListener(e -> {
+                int newIdx = idx - 1;
+                swapSlots(idx, newIdx);
+                SwingUtilities.invokeLater(() -> openSlotSubmenu(newIdx));
+            });
+            slotMenu.add(upItem);
+
+            // ── ⬇️ 아래로 이동 ────────────────────────────────────
+            JMenuItem downItem = makeMenuItem("⬇️  아래로 이동", null);
+            downItem.setEnabled(idx < OFFICE_SLOT_COUNT - 1);
+            downItem.addActionListener(e -> {
+                int newIdx = idx + 1;
+                swapSlots(idx, newIdx);
+                SwingUtilities.invokeLater(() -> openSlotSubmenu(newIdx));
+            });
+            slotMenu.add(downItem);
+
+        } else {
+            // ── ➕ 등록 ───────────────────────────────────────────
+            JMenuItem addItem = makeMenuItem("➕  등록", null);
+            addItem.addActionListener(e -> openSlotEditor(idx));
+            slotMenu.add(addItem);
+        }
+
+        return slotMenu;
+    }
+
+    /** 레지스트리 경로 조회 후 실행 */
+    private void launchByRegistry(String exeName) {
+        String path = null;
+        try {
+            Process proc = new ProcessBuilder(
+                "reg", "query",
+                "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\" + exeName,
+                "/ve"
+            ).start();
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                new java.io.InputStreamReader(proc.getInputStream(), "MS949"));
+            String ln;
+            while ((ln = br.readLine()) != null) {
+                if (ln.contains("REG_SZ")) { path = ln.split("REG_SZ")[1].trim(); break; }
+            }
+        } catch (Exception ex) { path = null; }
+        if (path == null || path.isEmpty()) {
+            JOptionPane.showMessageDialog(this, exeName + " 경로를 찾을 수 없습니다.",
+                "업무도구", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        launchByPath(path);
+    }
+/*
+    //  절대 경로로 실행 
+    private void launchByPath(String path) {
+        try { new ProcessBuilder(path).start(); }
+        catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "실행 실패: " + ex.getMessage(),
+                "업무도구", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+	*/
+/** 절대 경로로 실행 (.lnk 포함) */
+private void launchByPath(String path) {
+    try {
+        String lower = path.toLowerCase();
+        if (lower.endsWith(".lnk")) {
+            // .lnk 는 ProcessBuilder 로 직접 실행 불가 → cmd /c start 로 위임
+            new ProcessBuilder("cmd", "/c", "start", "", path).start();
+        } else {
+            new ProcessBuilder(path).start();
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "실행 실패: " + ex.getMessage(),
+            "업무도구", JOptionPane.ERROR_MESSAGE);
+    }
+}
+    /**
+     * 슬롯 등록/수정 다이얼로그.
+     * 저장 후 rebuildMenuBar() 로 메뉴 전체를 즉시 갱신한다.
+     */
+    private void openSlotEditor(int idx) {
+        if (clockHost == null) { showNotReady(); return; }
+
+        String curName = clockHost.getConfig(slotNameKey(idx), "");
+        String curPath = clockHost.getConfig(slotPathKey(idx), "");
+
+        JTextField nameField = new JTextField(curName, 26);
+        JTextField pathField = new JTextField(curPath, 34);
+        pathField.setEditable(true); // 직접 입력·붙여넣기 허용
+
+        JButton browseBtn = new JButton("찾아보기...");
+        browseBtn.addActionListener(e -> {
+            String cur = pathField.getText().trim();
+            String startDir = cur.isEmpty()
+                ? System.getProperty("user.home")
+                : new java.io.File(cur).getParent();
+            JFileChooser fc = new JFileChooser(startDir);
+            fc.setDialogTitle("실행 파일 선택");
+            fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "실행 가능 파일 (*.exe, *.bat, *.cmd, *.lnk)", "exe", "bat", "cmd", "lnk"));
+            fc.setAcceptAllFileFilterUsed(true);
+            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                java.io.File sel = fc.getSelectedFile();
+                pathField.setText(sel.getAbsolutePath());
+                if (nameField.getText().trim().isEmpty()) {
+                    String fn = sel.getName();
+                    int dot = fn.lastIndexOf('.');
+                    if (dot > 0) fn = fn.substring(0, dot);
+                    nameField.setText(fn);
+                }
+            }
+        });
+
+        JPanel row1 = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
+        row1.add(new JLabel("이름 : ")); row1.add(nameField);
+        JPanel row2 = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
+        row2.add(new JLabel("경로 : ")); row2.add(pathField); row2.add(browseBtn);
+        JPanel panel = new JPanel();
+        panel.setLayout(new javax.swing.BoxLayout(panel, javax.swing.BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        panel.add(row1);
+        panel.add(javax.swing.Box.createVerticalStrut(6));
+        panel.add(row2);
+
+        int result = JOptionPane.showConfirmDialog(this, panel,
+            "업무도구 슬롯 " + (idx + 1) + " 등록",
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        String newName = nameField.getText().trim();
+        String newPath = pathField.getText().trim();
+        if (newName.isEmpty() || newPath.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "이름과 경로를 모두 입력하세요.",
+                "업무도구", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        clockHost.setMultipleConfigAndSave(
+            slotNameKey(idx), newName,
+            slotPathKey(idx), newPath
+        );
+        rebuildMenuBar();
+    }
+
+    /** 슬롯 삭제 확인 후 저장, 메뉴 재빌드 */
+    private void deleteSlot(int idx, String displayName) {
+        if (clockHost == null) { showNotReady(); return; }
+        int ok = JOptionPane.showConfirmDialog(this,
+            "「" + displayName + "」 을 삭제하시겠습니까?",
+            "업무도구 삭제", JOptionPane.YES_NO_OPTION);
+        if (ok != JOptionPane.YES_OPTION) return;
+        clockHost.setMultipleConfigAndSave(
+            slotNameKey(idx), "",
+            slotPathKey(idx), ""
+        );
+        rebuildMenuBar();
+    }
+
+    /** 두 슬롯의 이름·경로를 교환하고 메뉴를 즉시 재빌드한다 */
+    private void swapSlots(int srcIdx, int dstIdx) {
+        if (clockHost == null) { showNotReady(); return; }
+        String srcName = clockHost.getConfig(slotNameKey(srcIdx), "");
+        String srcPath = clockHost.getConfig(slotPathKey(srcIdx), "");
+        String dstName = clockHost.getConfig(slotNameKey(dstIdx), "");
+        String dstPath = clockHost.getConfig(slotPathKey(dstIdx), "");
+        clockHost.setMultipleConfigAndSave(
+            slotNameKey(srcIdx), dstName,
+            slotPathKey(srcIdx), dstPath,
+            slotNameKey(dstIdx), srcName,
+            slotPathKey(dstIdx), srcPath
+        );
+        rebuildMenuBar();
+    }
+
+    /** 메뉴바 전체를 EDT 에서 재빌드·적용한다 */
+    private void rebuildMenuBar() {
+        SwingUtilities.invokeLater(() -> {
+            setJMenuBar(buildMenuBar());
+            revalidate();
+            repaint();
+        });
+    }
+
+    /**
+     * 재빌드 후 업무도구 메뉴의 특정 슬롯 서브메뉴를 프로그래밍으로 열어
+     * 이동 후에도 메뉴가 닫히지 않고 해당 슬롯이 열린 채로 유지되게 한다.
+     */
+    private void openSlotSubmenu(int slotIdx) {
+        JMenuBar bar = getJMenuBar();
+        for (int m = 0; m < bar.getMenuCount(); m++) {
+            JMenu menu = bar.getMenu(m);
+            if (menu == null || !"업무도구".equals(menu.getText())) continue;
+
+            menu.doClick(); // 업무도구 메뉴 열기
+
+            // 고정 항목(Excel/Word/PPT)은 JMenuItem, 슬롯은 JMenu — JMenu 만 카운트
+            int slotCount = 0;
+            for (int c = 0; c < menu.getMenuComponentCount(); c++) {
+                java.awt.Component comp = menu.getMenuComponent(c);
+                if (comp instanceof JMenu slotMenu) {
+                    if (slotCount == slotIdx) {
+                        slotMenu.doClick(); // 해당 슬롯 서브메뉴 열기
+                        return;
+                    }
+                    slotCount++;
+                }
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  [Help] 메뉴
+    // ═══════════════════════════════════════════════════════════
+
     private JMenu buildHelpMenu() {
         JMenu helpMenu = makeMenu("Help");
 		
@@ -502,84 +819,62 @@ public class SplashWindow extends JFrame {
         // ── 프로그램 개발자 ─────────────────────────────────────────────────
         JMenuItem prorgammer = makeMenuItem("개발자 소개", "김갑수 / 대한민국 서울");
         prorgammer.addActionListener(e -> 
-			{
-				try {
+		{
+			try {
                     java.awt.Desktop.getDesktop().browse(new java.net.URI("https://github.com/GarpsuKim"));
 					} catch (Exception ex) {
                     JOptionPane.showMessageDialog(SplashWindow.this,
 					"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 				}
-				
-			}
-		);
+			
+		}
+	);
         helpMenu.add(prorgammer);
 		
 		// ── 프로그램 다운로드 ─────────────────────────────────────────────────
         JMenuItem pgmDownload = makeMenuItem("설치 파일", "끝판왕 (이 프로그램) 설치파일 다운로드");
         pgmDownload.addActionListener(e -> 
-			{
-				try {
+		{
+			try {
                     java.awt.Desktop.getDesktop().browse(new java.net.URI("https://github.com/GarpsuKim/KootPanKing/releases/tag/KootPanKing"));
 					} catch (Exception ex) {
                     JOptionPane.showMessageDialog(SplashWindow.this,
 					"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 				}
-				
-			}
-		);
+			
+		}
+	);
         helpMenu.add(pgmDownload);
 		
 		// ── 프로그램 소스 ─────────────────────────────────────────────────
         JMenuItem pgmSource = makeMenuItem("프로그램 소스", "Java 프로그램 소스");
         pgmSource.addActionListener(e -> 
-			{
-				try {
+		{
+			try {
                     java.awt.Desktop.getDesktop().browse(new java.net.URI("https://github.com/GarpsuKim/KootPanKing"));
 					} catch (Exception ex) {
                     JOptionPane.showMessageDialog(SplashWindow.this,
 					"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 				}
-				
-			}
-		);
+			
+		}
+	);
         helpMenu.add(pgmSource);
 		
 		// ── 자바 ─────────────────────────────────────────────────
         JMenuItem javaInstaller = makeMenuItem("Java/JVM ", "Java 환경 설치파일 다운로드");
         javaInstaller.addActionListener(e -> 
-			{
-				try {
+		{
+			try {
                     java.awt.Desktop.getDesktop().browse(new java.net.URI("https://www.oracle.com/java"));
 					} catch (Exception ex) {
                     JOptionPane.showMessageDialog(SplashWindow.this,
 					"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 				}
-				
-			}
-		);
+			
+		}
+	);
         helpMenu.add(javaInstaller);
-		// ── About ─────────────────────────────────────────────────
-        JMenuItem aboutItem = makeMenuItem("About", "프로그램 정보");
-        aboutItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0));
-        aboutItem.addActionListener(e -> doShowAbout());
-        helpMenu.add(aboutItem);
-		
-        return helpMenu;
-	}
-	
-	
-    // ── [Help] 메뉴 ──────────────────────────────────────────────
-	/*
-		private JMenu buildHelpMenu() {
-        JMenu helpMenu = makeMenu("Help");
-		
-        // ── 기본 설정 파일 ────────────────────────────────────────
-        JMenuItem iniItem = makeMenuItem("⚙️ 기본 설정 파일", "설정 파일(ini)을 표시합니다");
-        iniItem.addActionListener(e -> doShowConfigFile());
-        helpMenu.add(iniItem);
-		
-        helpMenu.addSeparator();
-		
         // ── About ─────────────────────────────────────────────────
         JMenuItem aboutItem = makeMenuItem("About", "프로그램 정보");
         aboutItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0));
@@ -587,12 +882,9 @@ public class SplashWindow extends JFrame {
         helpMenu.add(aboutItem);
 		
         return helpMenu;
-		}
-		
-	*/
-	
-	
-	// ═══════════════════════════════════════════════════════════
+	}
+
+    // ═══════════════════════════════════════════════════════════
     //  메뉴 액션 구현
     // ═══════════════════════════════════════════════════════════
 	
@@ -740,7 +1032,6 @@ public class SplashWindow extends JFrame {
 		
 		JTextArea ta = new JTextArea(content);
 		ta.setEditable(false);
-		// ta.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
 		ta.setFont(new Font("돋움체", Font.PLAIN, 16));
 		ta.setBackground(new Color(235, 245, 255));
 		ta.setForeground(new Color( 20,  50,  90));
@@ -769,7 +1060,6 @@ public class SplashWindow extends JFrame {
 						java.awt.geom.Rectangle2D r =
                         ta.modelToView2D(startOffset);
 						if (r == null) continue;
-						// int y = (int) r.getY() + fm.getAscent() + ta.getMargin().top;
 						int y = (int) r.getY() + fm.getAscent();
 						String num = String.format("%4d", i + 1);
 						g2.drawString(num, 4, y);
@@ -832,121 +1122,7 @@ public class SplashWindow extends JFrame {
 		
 		sub.setVisible(true);
 	}
-	
-	
-	
-	/** 텍스트 내용을 새 창에 표시 */
-	private void showTextWindow__(File file, String encLabel, String content) {
-		JFrame sub = new JFrame("📄 " + file.getName());
-		sub.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-		
-		JTextArea ta = new JTextArea(content);
-		ta.setEditable(false);
-		ta.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
-		ta.setBackground(new Color(235, 245, 255));
-		ta.setForeground(new Color( 20,  50,  90));
-		ta.setCaretColor(new Color( 20,  50,  90));
-		ta.setLineWrap(true);
-		ta.setWrapStyleWord(false);
-		ta.setMargin(new Insets(6, 8, 6, 8));
-		
-		// 줄 번호 패널
-		JTextArea lineNumbers = new JTextArea();
-		lineNumbers.setEditable(false);
-		lineNumbers.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));  // Consolas → Malgun Gothic
-		lineNumbers.setBackground(new Color(210, 225, 240));
-		lineNumbers.setForeground(new Color(100, 130, 170));
-		lineNumbers.setMargin(new Insets(6, 6, 6, 6));
-		
-		String[] lines = content.split("\n", -1);
-		StringBuilder sb = new StringBuilder();
-		for (int i = 1; i <= lines.length; i++) {
-			sb.append(String.format("%4d\n", i));
-		}
-		lineNumbers.setText(sb.toString());
-		
-		JScrollPane sp = new JScrollPane(ta);
-		sp.setBorder(BorderFactory.createEmptyBorder());
-		sp.getViewport().setBackground(new Color(235, 245, 255));
-		sp.setRowHeaderView(lineNumbers);  // 줄번호 왼쪽에 부착
-		
-		// 상태바: 인코딩 + 파일 경로 + 크기
-		JLabel info = new JLabel(
-		" " + encLabel + "  |  " + file.getAbsolutePath() + "  (" + file.length() + " bytes)");
-		info.setFont(new Font("Malgun Gothic", Font.PLAIN, 11));
-		info.setForeground(new Color( 20,  60, 120));
-		info.setBackground(new Color(200, 225, 245));
-		info.setOpaque(true);
-		info.setBorder(BorderFactory.createCompoundBorder(
-			BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(140, 180, 210)),
-		BorderFactory.createEmptyBorder(2, 4, 2, 4)));
-		
-		sub.setLayout(new BorderLayout());
-		sub.add(sp,   BorderLayout.CENTER);
-		sub.add(info, BorderLayout.SOUTH);
-		
-		// 화면 크기 80% 상한, 최소 600×400
-		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-		int w = Math.max(600, Math.min((int)(screen.width  * 0.70), 1100));
-		int h = Math.max(400, Math.min((int)(screen.height * 0.70),  800));
-		sub.setSize(w, h);
-		
-		// 이미 열린 창들과 겹치지 않도록 약간 오프셋
-		sub.setLocationRelativeTo(this);
-		Point p = sub.getLocation();
-		sub.setLocation(p.x + 30, p.y + 30);
-		sub.setVisible(true);
-	}
-	
-	/** 텍스트 내용을 새 창에 표시 */
-	/*
-		private void showTextWindow_(File file, String encLabel, String content) {
-        JFrame sub = new JFrame("📄 " + file.getName());
-        sub.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-		
-        JTextArea ta = new JTextArea(content);
-        ta.setEditable(false);
-        ta.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
-        ta.setBackground(new Color(235, 245, 255));
-        ta.setForeground(new Color( 20,  50,  90));
-        ta.setCaretColor(new Color( 20,  50,  90));
-        ta.setLineWrap(true);
-        ta.setWrapStyleWord(true);
-        ta.setMargin(new Insets(6, 8, 6, 8));
-		
-        JScrollPane sp = new JScrollPane(ta);
-        sp.setBorder(BorderFactory.createEmptyBorder());
-        sp.getViewport().setBackground(new Color(235, 245, 255));
-		
-        // 상태바: 인코딩 + 파일 경로 + 크기
-        JLabel info = new JLabel(
-		" " + encLabel + "  |  " + file.getAbsolutePath() + "  (" + file.length() + " bytes)");
-        info.setFont(new Font("Malgun Gothic", Font.PLAIN, 11));
-        info.setForeground(new Color( 20,  60, 120));
-        info.setBackground(new Color(200, 225, 245));
-        info.setOpaque(true);
-        info.setBorder(BorderFactory.createCompoundBorder(
-		BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(140, 180, 210)),
-		BorderFactory.createEmptyBorder(2, 4, 2, 4)));
-		
-        sub.setLayout(new BorderLayout());
-        sub.add(sp,   BorderLayout.CENTER);
-        sub.add(info, BorderLayout.SOUTH);
-		
-        // 화면 크기 80% 상한, 최소 600×400
-        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-        int w = Math.max(600, Math.min((int)(screen.width  * 0.70), 1100));
-        int h = Math.max(400, Math.min((int)(screen.height * 0.70),  800));
-        sub.setSize(w, h);
-		
-        // 이미 열린 창들과 겹치지 않도록 약간 오프셋
-        sub.setLocationRelativeTo(this);
-        Point p = sub.getLocation();
-        sub.setLocation(p.x + 30, p.y + 30);
-		
-        sub.setVisible(true);
-		}
-	*/	
+
     // ═══════════════════════════════════════════════════════════
     //  로그 출력 내부 구현
     // ═══════════════════════════════════════════════════════════
@@ -976,16 +1152,19 @@ public class SplashWindow extends JFrame {
 			
 		} catch (BadLocationException ignored) {}
 	}
+
     // ═══════════════════════════════════════════════════════════
     //  유틸
     // ═══════════════════════════════════════════════════════════
+
     /** 시계 미초기화 안내 */
     private void showNotReady() {
         JOptionPane.showMessageDialog(this,
             "시계가 아직 초기화되지 않았습니다.\n잠시 후 다시 시도하세요.",
 		"알림", JOptionPane.INFORMATION_MESSAGE);
 	}
-	/* 파일을 UTF-8 → UTF-16 BE → EUC-KR 순으로 자동 인코딩 탐지하여 읽기
+
+    /* 파일을 UTF-8 → UTF-16 BE → EUC-KR 순으로 자동 인코딩 탐지하여 읽기
 	*  반환: [0] = 인코딩 레이블,  [1] = 파일 내용 */
 	private String[] readFileAutoEncoding(File file) throws IOException {	
 		try (FileInputStream fis = new FileInputStream(file)) {			
@@ -1031,7 +1210,6 @@ public class SplashWindow extends JFrame {
 		BufferedReader br = new BufferedReader(new InputStreamReader(is, enc));
 		StringBuilder sb = new StringBuilder();
 		String line;
-		//  while ((line = br.readLine()) != null) sb.append(line).append("\n");
 		
 		boolean first = true;
 		while ((line = br.readLine()) != null) {
@@ -1052,29 +1230,29 @@ public class SplashWindow extends JFrame {
 		} catch (Exception e) { return false; }
 	}	
 	
-	// ── 메뉴 스타일 헬퍼 ─────────────────────────────────────────
-	private JMenu makeMenu(String text) {
-		JMenu m = new JMenu(text);
-		m.setForeground(new Color( 20,  50,  90));
-		m.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
-		m.getPopupMenu().setBackground(new Color(210, 235, 250));
-		return m;
-	}
-	private JMenuItem makeMenuItem(String text, String tooltip) {
-		JMenuItem item = new JMenuItem(text);
-		item.setForeground(new Color( 20,  50,  90));
-		item.setBackground(new Color(210, 235, 250));
-		item.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
-		if (tooltip != null && !tooltip.isEmpty()) item.setToolTipText(tooltip);
-		return item;
-	}
-	/** 외부에서 받은 JMenu 에 스타일 + 텍스트 덮어쓰기 */
-	private void styleMenu(JMenu m, String newText) {
-		m.setText(newText);
-		m.setForeground(new Color( 20,  50,  90));
-		m.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
-		m.getPopupMenu().setBackground(new Color(210, 235, 250));
-	}
+    // ── 메뉴 스타일 헬퍼 ─────────────────────────────────────────
+    private JMenu makeMenu(String text) {
+        JMenu m = new JMenu(text);
+        m.setForeground(new Color( 20,  50,  90));
+        m.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
+        m.getPopupMenu().setBackground(new Color(210, 235, 250));
+        return m;
+    }
+    private JMenuItem makeMenuItem(String text, String tooltip) {
+        JMenuItem item = new JMenuItem(text);
+        item.setForeground(new Color( 20,  50,  90));
+        item.setBackground(new Color(210, 235, 250));
+        item.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
+        if (tooltip != null && !tooltip.isEmpty()) item.setToolTipText(tooltip);
+        return item;
+    }
+    /** 외부에서 받은 JMenu 에 스타일 + 텍스트 덮어쓰기 */
+    private void styleMenu(JMenu m, String newText) {
+        m.setText(newText);
+        m.setForeground(new Color( 20,  50,  90));
+        m.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
+        m.getPopupMenu().setBackground(new Color(210, 235, 250));
+    }
 }   //  public class SplashWindow 
 
 // ═══════════════════════════════════════════════════════════
@@ -1107,13 +1285,23 @@ public class SplashWindow extends JFrame {
 	*              splash.setClockHost(new SplashWindow.ClockHostCallback() {
 	*                  @Override public JMenu buildGlobalMenu() {
 	*                      return new MenuBuilder(new MenuBuilder.ClockHostContext(clock))
-	*                                 .buildGlobalMenuPublic();  // MenuBuilder에 public 위임 메서드 추가 필요
+	*                                 .buildGlobalMenuPublic();
 	*                  }
 	*                  @Override public void exitAll()         { clock.exitAll(); }
 	*                  @Override public void showConfigFile()  { clock.showConfigFile(); }
 	*                  @Override public void showAbout()       { clock.showAbout(); }
 	*                  @Override public String getConfigFilePath() {
 	*                      return KootPanKing.CONFIG_FILE;
+	*                  }
+	*                  // [신규] setMultipleConfigAndSave 구현 예시
+	*                  @Override public void setMultipleConfigAndSave(String... entries) {
+	*                      for (int i = 0; i + 1 < entries.length; i += 2)
+	*                          clock.setConfig(entries[i], entries[i+1]);
+	*                      clock.saveConfig(); // 파일 I/O 1회
+	*                  }
+	*                  @Override public void setConfigAndSave(String key, String value) {
+	*                      clock.setConfig(key, value);
+	*                      clock.saveConfig();
 	*                  }
 	*              });
 	*              splash.log("시계 초기화 완료.");
