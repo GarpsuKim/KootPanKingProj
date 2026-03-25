@@ -23,6 +23,7 @@ if not exist "%ROOT_DIR%\Lib" (
 )
 
 echo ROOT_DIR = %ROOT_DIR%
+pause
 
 REM ── 2. 기본 설정 ────────────────────────────
 set "PROJECT=KootPanKing"
@@ -54,10 +55,11 @@ cd /d "%SOURCE_DIR%"
 
 dir /b "*.java" > files.txt
 
-set FILES=
-for /f "delims=" %%f in (files.txt) do set FILES=!FILES! %%f
+type files.txt
+pause
 
-javac -encoding UTF-8 -cp "%LIB_PATH%\*" -d "%BUILD_DIR%" !FILES! >> "%LOG_FILE%" 2>&1
+javac -encoding UTF-8 -cp "%LIB_PATH%\*" -d "%BUILD_DIR%" @files.txt
+
 
 if errorlevel 1 (
     echo [오류] 컴파일 실패 (로그 확인)
