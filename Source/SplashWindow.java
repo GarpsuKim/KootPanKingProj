@@ -1260,9 +1260,12 @@ public class SplashWindow extends JFrame {
 				// 2. app.exePath 기준 폴더 사용 (없으면 시스템 임시 폴더 폴백)
 				
 				
-				String sssss = resolveAppDir();
-				File sssssFile = new File(sssss);
-				File parentDir = sssssFile.getParentFile();  // 부모 폴더
+				String AppDir = resolveAppDir();
+				File AppDirFile = new File(AppDir);
+				String  saveZip =  AppDirFile.getAbsolutePath() + "UpGrade.zip";
+				GitHubZipDownload(saveZip);
+
+				File parentDir = AppDirFile.getParentFile();  // 부모 폴더
 				String parentPath = parentDir != null ? parentDir.getAbsolutePath() : "";
 				java.io.File tempDir = new File(parentPath);
 				if (!tempDir.exists()) tempDir.mkdirs();				
@@ -1277,12 +1280,13 @@ public class SplashWindow extends JFrame {
 				}
 				
 				System.out.println("[Upgrade] 배치 파일 저장 완료 (UTF-8): " + batFile.getAbsolutePath());
-				
+
+/*
 				// 4. 배치 파일 실행
 				ProcessBuilder pb = new ProcessBuilder("cmd", "/c", "start", "\"\"", batFile.getAbsolutePath());
 				pb.directory(tempDir);
 				pb.start();
-				
+*/				
 				// 5. 프로그램 종료
 				SwingUtilities.invokeLater(() -> {
 					log("🚀 업데이터 실행됨 — 프로그램을 종료합니다.");
@@ -1291,7 +1295,6 @@ public class SplashWindow extends JFrame {
 						else System.exit(0);
 					}).start();
 				});
-				
 				} catch (Exception ex) {
 				swingLog("❌ 업그레이드 오류: " + ex.getMessage());
 				ex.printStackTrace();
@@ -2142,6 +2145,9 @@ public class SplashWindow extends JFrame {
 	}
 	
 	private void GitHubZipDownload ( String savePath  ) {
+	
+        System.out.println("다운로드 시작 : " + savePath);
+	
         String fileURL = "https://github.com/GarpsuKim/KootPanKing/releases/download/v1.0.0/KootPanKing.zip";
         // String savePath = "KootPanKing.zip";
 		
@@ -2170,17 +2176,8 @@ public class SplashWindow extends JFrame {
 			} catch (Exception e) {
             e.printStackTrace();
 		}
-	}
-	
-	
+	}	
 }   //  public class SplashWindow 
-
-
-
-
-
-
-
 // ═══════════════════════════════════════════════════════════
 //  KootPanKing.main() 수정 예시 (참고용 주석)
 // ═══════════════════════════════════════════════════════════
