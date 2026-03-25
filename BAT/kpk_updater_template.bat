@@ -1,7 +1,6 @@
 rem  프로그램 자동 업데이트를 위한 bat 명령어 파일
 rem  모든 파일 자동 다운로드/압축풀기/ 업데이트 완료 후 
 rem  EXE 재시작 직전에 이 파일 실행
-
 @echo off
 setlocal
 echo [kpk_updater] start > "{{LOG_PATH}}"

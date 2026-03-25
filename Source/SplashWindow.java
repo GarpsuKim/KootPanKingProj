@@ -1422,20 +1422,12 @@ public class SplashWindow extends JFrame {
                     swingLog("❌ 템플릿 다운로드 실패 (HTTP " + code + ")"); return;
 				}
 				
-				/*
 					try (java.io.BufferedReader br = new java.io.BufferedReader(
 					new java.io.InputStreamReader(con.getInputStream(),
 					java.nio.charset.StandardCharsets.UTF_8));
 					java.io.PrintWriter pw = new java.io.PrintWriter(
 					new java.io.OutputStreamWriter(
 					new java.io.FileOutputStream(batFile), "MS949"))) {
-				*/
-				
-				// 수정 코드 (ANSI = MS949, 단 BOM 없이)
-				try (java.io.PrintWriter pw = new java.io.PrintWriter(
-					new java.io.BufferedWriter(
-						new java.io.OutputStreamWriter(
-						new java.io.FileOutputStream(batFile), "MS949")))) {
 						
 						String line;
 						while ((line = br.readLine()) != null) {
