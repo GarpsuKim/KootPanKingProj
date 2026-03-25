@@ -11,9 +11,6 @@ rem
 rem  **********************************************************
 @echo off
 chcp 65001 > nul
-echo ============================================
-echo   KootPanKing 다운로드 및 실행
-echo ============================================
 set "URL=https://github.com/GarpsuKim/KootPanKing/releases/download/v1.0.0/KootPanKing.zip"
 set "ZIP=appUpGrade.zip"
 set "DIR=KootPanKing"
@@ -22,11 +19,14 @@ if not exist "%ZIP%" (
     pause
     exit /b
 )
-echo 완료
 if exist  KootPanKing.exe   del KootPanKing.exe 
 if exist  app\KootPanKing.jsa   del app\KootPanKing.jsa 
 if exist  app\settings\KootPanKing.lock   del app\settings\KootPanKing.lock 
-echo.
+echo ============================================
+echo   KootPanKing 다운로드 완료하였습니다.
+echo   [엔터]키를 누르세요
+echo ============================================
+pause
 echo [2/3] 압축 해제 중...
 rem powershell -Command "Expand-Archive -Path '%ZIP%' -DestinationPath '%DIR%' -Force"
 powershell -Command "Expand-Archive -Path '%ZIP%' -DestinationPath . -Force"

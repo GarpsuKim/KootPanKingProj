@@ -1230,7 +1230,7 @@ public class SplashWindow extends JFrame {
 		new Thread(() -> {
 			try {
 				// 1. GitHub에서 배치 파일 내용 읽기 (UTF-8)
-				String batUrl = "https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/BAT/DownLoad_UpGrade.BAT";
+				String batUrl = "https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/BAT/QuickUpGrade.BAT";
 				java.net.URL url = new java.net.URI(batUrl).toURL();
 				java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
 				conn.setConnectTimeout(10000);
@@ -1262,14 +1262,14 @@ public class SplashWindow extends JFrame {
 				
 				String AppDir = resolveAppDir();
 				File AppDirFile = new File(AppDir);
-				String  saveZip =  AppDirFile.getAbsolutePath() + "UpGrade.zip";
+				String  saveZip =  AppDirFile.getAbsolutePath() + "appUpGrade.zip";
 				GitHubZipDownload(saveZip);
 
 				File parentDir = AppDirFile.getParentFile();  // 부모 폴더
 				String parentPath = parentDir != null ? parentDir.getAbsolutePath() : "";
 				java.io.File tempDir = new File(parentPath);
 				if (!tempDir.exists()) tempDir.mkdirs();				
-				java.io.File batFile = new java.io.File(tempDir, "DownLoad_UpGrade.BAT");
+				java.io.File batFile = new java.io.File(tempDir, "QuickUpGrade.BAT");
 				System.out.println("[Upgrade] DownLoad_Release.BAT : " + tempDir.getAbsolutePath());
 				
 				// 3. BOM 없는 UTF-8로 저장 (원본 그대로)
@@ -1281,12 +1281,11 @@ public class SplashWindow extends JFrame {
 				
 				System.out.println("[Upgrade] 배치 파일 저장 완료 (UTF-8): " + batFile.getAbsolutePath());
 
-/*
 				// 4. 배치 파일 실행
 				ProcessBuilder pb = new ProcessBuilder("cmd", "/c", "start", "\"\"", batFile.getAbsolutePath());
 				pb.directory(tempDir);
 				pb.start();
-*/				
+
 				// 5. 프로그램 종료
 				SwingUtilities.invokeLater(() -> {
 					log("🚀 업데이터 실행됨 — 프로그램을 종료합니다.");
