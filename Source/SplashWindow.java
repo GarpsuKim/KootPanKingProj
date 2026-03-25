@@ -12,6 +12,9 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
 /**
 	* SplashWindow — 프로그램 시작 직후 표시되는 메인 윈도우
 	*
@@ -1053,7 +1056,7 @@ public class SplashWindow extends JFrame {
 		
         // ── 프로그램 업그레이드 ───────────────────────────────────
         JMenuItem upgradeItem = makeMenuItem("🔄 프로그램 업그레이드", "GitHub 에서 최신 버전을 내려받아 덮어씁니다");
-        upgradeItem.addActionListener(e -> doUpgrade());
+        upgradeItem.addActionListener(e -> doUpgradeNew());
         helpMenu.add(upgradeItem);
 		
         helpMenu.addSeparator();
@@ -1214,7 +1217,93 @@ public class SplashWindow extends JFrame {
 		* 실행 중인 .exe 를 Java 쪽에서 직접 덮어쓰면 Windows 파일 잠금으로
 		* Access Denied 가 발생하므로 bat 으로 회피한다.
 	*/
-    private void doUpgrade() {
+	
+	// SplashWindow.java 내 doUpgrade() 메서드
+	private void doUpgradeNew() {
+		int confirm = JOptionPane.showConfirmDialog(this,
+			"GitHub 에서 최신 버전을 다운로드하는 배치 파일을 실행합니다.\n\n"
+			+ "배치 파일 실행 후 이 프로그램은 자동으로 종료됩니다.\n\n"
+			+ "계속하시겠습니까?",
+		"프로그램 업그레이드", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+		if (confirm != JOptionPane.YES_OPTION) return;
+		
+		new Thread(() -> {
+			try {
+				// 1. GitHub에서 배치 파일 내용 읽기 (UTF-8)
+				String batUrl = "https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/BAT/DownLoad_UpGrade.BAT";
+				java.net.URL url = new java.net.URI(batUrl).toURL();
+				java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+				conn.setConnectTimeout(10000);
+				conn.setReadTimeout(15000);
+				
+				// UTF-8로 읽기
+				StringBuilder content = new StringBuilder();
+				try (java.io.BufferedReader reader = new java.io.BufferedReader(
+				new java.io.InputStreamReader(conn.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    content.append(line).append("\r\n");
+				}
+				}
+				conn.disconnect();
+				
+				String batContent = content.toString();
+				System.out.println("[Upgrade] 배치 파일 내용 길이: " + batContent.length());
+				
+				/*
+					// 2. C:\temp 폴더 생성
+					java.io.File tempDir = new java.io.File("C:\\temp");
+					if (!tempDir.exists()) tempDir.mkdirs();				
+					java.io.File batFile = new java.io.File(tempDir, "DownLoad_Release.BAT");
+				*/
+				
+				// 2. app.exePath 기준 폴더 사용 (없으면 시스템 임시 폴더 폴백)
+				
+				
+				String sssss = resolveAppDir();
+				File sssssFile = new File(sssss);
+				File parentDir = sssssFile.getParentFile();  // 부모 폴더
+				String parentPath = parentDir != null ? parentDir.getAbsolutePath() : "";
+				java.io.File tempDir = new File(parentPath);
+				if (!tempDir.exists()) tempDir.mkdirs();				
+				java.io.File batFile = new java.io.File(tempDir, "DownLoad_Release.BAT");
+				System.out.println("[Upgrade] DownLoad_Release.BAT : " + tempDir.getAbsolutePath());
+				
+				// 3. BOM 없는 UTF-8로 저장 (원본 그대로)
+				try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(
+				new java.io.FileOutputStream(batFile), java.nio.charset.StandardCharsets.UTF_8)) {
+                writer.write(batContent);
+                writer.flush();
+				}
+				
+				System.out.println("[Upgrade] 배치 파일 저장 완료 (UTF-8): " + batFile.getAbsolutePath());
+				
+				// 4. 배치 파일 실행
+				ProcessBuilder pb = new ProcessBuilder("cmd", "/c", "start", "\"\"", batFile.getAbsolutePath());
+				pb.directory(tempDir);
+				pb.start();
+				
+				// 5. 프로그램 종료
+				SwingUtilities.invokeLater(() -> {
+					log("🚀 업데이터 실행됨 — 프로그램을 종료합니다.");
+					new javax.swing.Timer(1000, e -> {
+						if (clockHost != null) clockHost.exitAll();
+						else System.exit(0);
+					}).start();
+				});
+				
+				} catch (Exception ex) {
+				swingLog("❌ 업그레이드 오류: " + ex.getMessage());
+				ex.printStackTrace();
+				JOptionPane.showMessageDialog(SplashWindow.this,
+					"업그레이드 중 오류가 발생했습니다:\n" + ex.getMessage(),
+				"업그레이드 오류", JOptionPane.ERROR_MESSAGE);
+			}
+		}, "UpgradeThread").start();
+	}
+	
+	
+	private void doUpgrade() {
         int confirm = JOptionPane.showConfirmDialog(this,
             "GitHub 에서 최신 버전을 내려받아 업그레이드합니다.\n\n"
             + "다운로드 완료 후 프로그램이 자동으로 종료되고\n"
@@ -1422,12 +1511,12 @@ public class SplashWindow extends JFrame {
                     swingLog("❌ 템플릿 다운로드 실패 (HTTP " + code + ")"); return;
 				}
 				
-					try (java.io.BufferedReader br = new java.io.BufferedReader(
+				try (java.io.BufferedReader br = new java.io.BufferedReader(
 					new java.io.InputStreamReader(con.getInputStream(),
 					java.nio.charset.StandardCharsets.UTF_8));
 					java.io.PrintWriter pw = new java.io.PrintWriter(
-					new java.io.OutputStreamWriter(
-					new java.io.FileOutputStream(batFile), "MS949"))) {
+						new java.io.OutputStreamWriter(
+						new java.io.FileOutputStream(batFile), "MS949"))) {
 						
 						String line;
 						while ((line = br.readLine()) != null) {
@@ -1938,7 +2027,159 @@ public class SplashWindow extends JFrame {
         m.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
         m.getPopupMenu().setBackground(new Color(210, 235, 250));
 	}
+	
+    private String resolveAppDir() {
+		String EXE_PATH = ""; // ← 추가
+		
+        File jarDir = null;
+        // ① sun.java.command
+		
+		if (jarDir == null) {
+			try {
+				String sc = System.getProperty("sun.java.command", "").trim();
+				String[] parts = sc.split("\\s+");
+				String first = parts[0];
+				
+				// ★ .exe가 있으면 무조건 .exe 우선
+				if (first.endsWith(".exe")) {
+					File f = new File(first).getAbsoluteFile();
+					EXE_PATH = f.getAbsolutePath();
+					jarDir = f.getParentFile();
+					System.out.println("[AppDir] EXE 감지: " + EXE_PATH);
+					} else if (first.endsWith(".jar")) {
+					// .jar일 경우 .exe가 있는지 같은 폴더에서 찾아본다
+					File jarFile = new File(first).getAbsoluteFile();
+					File parent = jarFile.getParentFile();
+					File exeCandidate = new File(parent, "KootPanKing.exe");
+					if (exeCandidate.exists()) {
+						EXE_PATH = exeCandidate.getAbsolutePath();
+						jarDir = parent;
+						System.out.println("[AppDir] JAR 옆 EXE 감지: " + EXE_PATH);
+						} else {
+						EXE_PATH = jarFile.getAbsolutePath();
+						jarDir = parent;
+						System.out.println("[AppDir] JAR 감지 (EXE 없음): " + EXE_PATH);
+					}
+				}
+			} catch (Exception ignored) {}
+		}
+		
+		
+		// ② CodeSource 폴백 (sun.java.command가 없을 때)
+		if (jarDir == null) {
+			try {
+				File loc = new File(KootPanKing.class.getProtectionDomain()
+				.getCodeSource().getLocation().toURI());
+				if (!loc.isDirectory()) {
+					// .class 또는 .jar 파일
+					File parent = loc.getParentFile();
+					File exeCandidate = new File(parent, "KootPanKing.exe");
+					if (exeCandidate.exists()) {
+						EXE_PATH = exeCandidate.getAbsolutePath();
+						jarDir = parent;
+						} else {
+						EXE_PATH = loc.getAbsolutePath();
+						jarDir = parent;
+					}
+					} else {
+					// IDE/class 직접 실행: loc이 디렉터리 → EXE_PATH 별도 탐색
+					jarDir = loc;
+					File exeCandidate = new File(loc, "KootPanKing.exe");
+					if (exeCandidate.exists()) {
+						EXE_PATH = exeCandidate.getAbsolutePath();
+					}
+					// EXE_PATH 여전히 빈 문자열이면 ProcessHandle 로 보완 (③에서 처리)
+				}
+				System.out.println("[AppDir] CodeSource 감지: " + EXE_PATH);
+			} catch (Exception ignored) {}
+		}
+		
+		// ③ ProcessHandle 보완 - EXE_PATH가 아직 비어있을 때만 시도
+		if (EXE_PATH.isEmpty()) {
+			try {
+				java.util.Optional<String> cmd = ProcessHandle.current().info().command();
+				if (cmd.isPresent()) {
+					File f = new File(cmd.get());
+					String name = f.getName().toLowerCase();
+					if (f.exists()
+						&& !name.equals("java.exe") && !name.equals("javaw.exe")
+						&& !name.equals("java")     && !name.equals("javaw")) {
+						EXE_PATH = f.getAbsolutePath();
+						if (jarDir == null) jarDir = f.getParentFile();
+						System.out.println("[AppDir] ProcessHandle 감지: " + EXE_PATH);
+					}
+				}
+			} catch (Exception ignored) {}
+		}
+		/*
+			if (jarDir == null) {
+            try {
+			File loc = new File(KootPanKing.class.getProtectionDomain()
+			.getCodeSource().getLocation().toURI());
+			jarDir = loc.isDirectory() ? loc : loc.getParentFile();
+			} catch (Exception ignored) {}
+			}
+		*/
+        // 기존 설정 파일이 JAR 옆에 있으면 → 무조건 JAR 폴더 사용 (설정 유지)
+        if (jarDir != null && (
+			new File(jarDir, "settings" + File.separator + "clock_settings.ini").exists() ||
+		new File(jarDir, "clock_settings.ini").exists())) {
+		System.out.println("[AppDir] 기존 설정 발견 → JAR 폴더: " + jarDir.getAbsolutePath());
+		return jarDir.getAbsolutePath() + File.separator;
+		}
+        // JAR 폴더에 쓰기 가능하면 사용
+        if (jarDir != null && jarDir.canWrite()) {
+            System.out.println("[AppDir] JAR 폴더 사용: " + jarDir.getAbsolutePath());
+            return jarDir.getAbsolutePath() + File.separator;
+		}
+        // 쓰기 불가(C:\Program Files 등) → %APPDATA%\KootPanKing\
+        String appData = System.getenv("APPDATA");
+        if (appData == null) appData = System.getProperty("user.home");
+        File dir = new File(appData + File.separator + "KootPanKing");
+        if (!dir.exists()) dir.mkdirs();
+        System.out.println("[AppDir] APPDATA 폴더 사용: " + dir.getAbsolutePath());
+        return dir.getAbsolutePath() + File.separator;
+	}
+	
+	private void GitHubZipDownload ( String savePath  ) {
+        String fileURL = "https://github.com/GarpsuKim/KootPanKing/releases/download/v1.0.0/KootPanKing.zip";
+        // String savePath = "KootPanKing.zip";
+		
+        try {
+            URL url = new URL(fileURL);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setInstanceFollowRedirects(true); // GitHub 리다이렉트 대응
+			
+            int responseCode = conn.getResponseCode();
+            System.out.println("응답 코드: " + responseCode);
+			
+            try (InputStream in = conn.getInputStream();
+				FileOutputStream out = new FileOutputStream(savePath)) {
+				
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+				
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+				}
+			}
+			
+            System.out.println("다운로드 완료: " + savePath);
+			
+			} catch (Exception e) {
+            e.printStackTrace();
+		}
+	}
+	
+	
 }   //  public class SplashWindow 
+
+
+
+
+
+
 
 // ═══════════════════════════════════════════════════════════
 //  KootPanKing.main() 수정 예시 (참고용 주석)

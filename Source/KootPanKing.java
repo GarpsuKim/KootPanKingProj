@@ -25,6 +25,7 @@ public class KootPanKing extends JFrame {
     private Properties config = new Properties();
 	
     // ── 설정 파일 저장 폴더 결정 (우선순위 3단계) ─────────────────
+	static String EXE_PATH = ""; // ← 추가
     private static final String APP_DIR      = resolveAppDir();
     static final String SETTINGS_DIR = APP_DIR + "settings" + File.separator;
     static final String CONFIG_FILE  = SETTINGS_DIR + "clock_settings.ini";
@@ -38,21 +39,93 @@ public class KootPanKing extends JFrame {
     private static String resolveAppDir() {
         File jarDir = null;
         // ① sun.java.command
-        if (jarDir == null) {
-            try {
-                String sc = System.getProperty("sun.java.command", "").trim();
-                if (sc.endsWith(".jar"))
-				jarDir = new File(sc).getAbsoluteFile().getParentFile();
+		
+		if (jarDir == null) {
+			try {
+				String sc = System.getProperty("sun.java.command", "").trim();
+				String[] parts = sc.split("\\s+");
+				String first = parts[0];
+				
+				// ★ .exe가 있으면 무조건 .exe 우선
+				if (first.endsWith(".exe")) {
+					File f = new File(first).getAbsoluteFile();
+					EXE_PATH = f.getAbsolutePath();
+					jarDir = f.getParentFile();
+					System.out.println("[AppDir] EXE 감지: " + EXE_PATH);
+					} else if (first.endsWith(".jar")) {
+					// .jar일 경우 .exe가 있는지 같은 폴더에서 찾아본다
+					File jarFile = new File(first).getAbsoluteFile();
+					File parent = jarFile.getParentFile();
+					File exeCandidate = new File(parent, "KootPanKing.exe");
+					if (exeCandidate.exists()) {
+						EXE_PATH = exeCandidate.getAbsolutePath();
+						jarDir = parent;
+						System.out.println("[AppDir] JAR 옆 EXE 감지: " + EXE_PATH);
+						} else {
+						EXE_PATH = jarFile.getAbsolutePath();
+						jarDir = parent;
+						System.out.println("[AppDir] JAR 감지 (EXE 없음): " + EXE_PATH);
+					}
+				}
 			} catch (Exception ignored) {}
 		}
-        // ③ CodeSource 폴백
-        if (jarDir == null) {
-            try {
-                File loc = new File(KootPanKing.class.getProtectionDomain()
+		
+		
+		// ② CodeSource 폴백 (sun.java.command가 없을 때)
+		if (jarDir == null) {
+			try {
+				File loc = new File(KootPanKing.class.getProtectionDomain()
 				.getCodeSource().getLocation().toURI());
-                jarDir = loc.isDirectory() ? loc : loc.getParentFile();
+				if (!loc.isDirectory()) {
+					// .class 또는 .jar 파일
+					File parent = loc.getParentFile();
+					File exeCandidate = new File(parent, "KootPanKing.exe");
+					if (exeCandidate.exists()) {
+						EXE_PATH = exeCandidate.getAbsolutePath();
+						jarDir = parent;
+						} else {
+						EXE_PATH = loc.getAbsolutePath();
+						jarDir = parent;
+					}
+					} else {
+					// IDE/class 직접 실행: loc이 디렉터리 → EXE_PATH 별도 탐색
+					jarDir = loc;
+					File exeCandidate = new File(loc, "KootPanKing.exe");
+					if (exeCandidate.exists()) {
+						EXE_PATH = exeCandidate.getAbsolutePath();
+					}
+					// EXE_PATH 여전히 빈 문자열이면 ProcessHandle 로 보완 (③에서 처리)
+				}
+				System.out.println("[AppDir] CodeSource 감지: " + EXE_PATH);
 			} catch (Exception ignored) {}
 		}
+
+		// ③ ProcessHandle 보완 - EXE_PATH가 아직 비어있을 때만 시도
+		if (EXE_PATH.isEmpty()) {
+			try {
+				java.util.Optional<String> cmd = ProcessHandle.current().info().command();
+				if (cmd.isPresent()) {
+					File f = new File(cmd.get());
+					String name = f.getName().toLowerCase();
+					if (f.exists()
+						&& !name.equals("java.exe") && !name.equals("javaw.exe")
+						&& !name.equals("java")     && !name.equals("javaw")) {
+						EXE_PATH = f.getAbsolutePath();
+						if (jarDir == null) jarDir = f.getParentFile();
+						System.out.println("[AppDir] ProcessHandle 감지: " + EXE_PATH);
+					}
+				}
+			} catch (Exception ignored) {}
+		}
+		/*
+			if (jarDir == null) {
+            try {
+			File loc = new File(KootPanKing.class.getProtectionDomain()
+			.getCodeSource().getLocation().toURI());
+			jarDir = loc.isDirectory() ? loc : loc.getParentFile();
+			} catch (Exception ignored) {}
+			}
+		*/
         // 기존 설정 파일이 JAR 옆에 있으면 → 무조건 JAR 폴더 사용 (설정 유지)
         if (jarDir != null && (
 			new File(jarDir, "settings" + File.separator + "clock_settings.ini").exists() ||
@@ -440,6 +513,12 @@ public class KootPanKing extends JFrame {
 		});
         this.chimeController.setEnabled(false); // 자식 인스턴스는 차임 비활성화
         this.appRestarter  = new AppRestarter(gmail, tg, this);
+        // ★ loadConfig() 시점엔 appRestarter 가 null 이라 setCachedPaths 가 스킵됐으므로
+        //    생성 직후 여기서 다시 호출해 ini 에서 읽은 경로를 캐시에 넣는다.
+        this.appRestarter.setCachedPaths(
+            config.getProperty("app.exePath",   ""),
+            config.getProperty("app.javawPath", ""),
+		config.getProperty("app.jsaPath",   ""));
         this.screenCapture = new CaptureManager(null); // clockPanel은 initUI 후 주입
         // 새 도시
         this.cityName  = newCityName;
@@ -453,10 +532,16 @@ public class KootPanKing extends JFrame {
         myConfigFile = CONFIG_FILE; // 기본 인스턴스: clock_settings.ini
         loadConfig();
         // AppLogger 경로를 GmailSender 에 주입
-        gmail.exeFilePath = AppLogger.getExeFilePath();
+        gmail.exeFilePath = !EXE_PATH.isEmpty() ? EXE_PATH : AppLogger.getExeFilePath();
         gmail.logFilePath = AppLogger.getLogFilePath();
         // ── 분리된 서비스 객체 초기화 ────────────────────────
         appRestarter  = new AppRestarter(gmail, tg, this);
+        // ★ loadConfig() 시점엔 appRestarter 가 null 이라 setCachedPaths 가 스킵됐으므로
+        //    생성 직후 여기서 다시 호출해 ini 에서 읽은 경로를 캐시에 넣는다.
+        appRestarter.setCachedPaths(
+            config.getProperty("app.exePath",   ""),
+            config.getProperty("app.javawPath", ""),
+		config.getProperty("app.jsaPath",   ""));
         System.out.println("[KootPanKing] NEW build - AppRestarter OK");
         screenCapture = new CaptureManager(null); // clockPanel은 initUI 후 주입
         chimeController = new ChimeController(this, new ChimeController.HostCallback() {
@@ -772,7 +857,7 @@ public class KootPanKing extends JFrame {
 					}
 				}
 			}
-
+			
 			private void showPopup(MouseEvent e) {
                 buildPopupMenu();
                 popupMenu.show(clockPanel, e.getX(), e.getY());
@@ -886,9 +971,12 @@ public class KootPanKing extends JFrame {
 		
         // ── Google Calendar 초기화 (백그라운드) ──────────────────
         // credentials.json 이 존재할 때만 시도 (없으면 조용히 건너뜀)
-        if (parent == null && GoogleCalendarService.credentialsExist()) {
+        // ★ APP_DIR 을 주입한 인스턴스로 credentialsExist() 를 호출해야
+        //    KootPanKing 이 APPDATA 로 우회한 경우에도 정확한 경로를 사용한다.
+        calendarService = new GoogleCalendarService();
+        calendarService.setAppDir(APP_DIR);
+        if (parent == null && calendarService.credentialsExist()) {
             new Thread(() -> {
-                calendarService = new GoogleCalendarService();
                 if (calendarService.init()) {
                     tg.calendarService = calendarService;
                     tg.kakao           = kakao;
@@ -1768,7 +1856,7 @@ public class KootPanKing extends JFrame {
         if (camera == null) return;
         // 실행 파일 폴더 기준 saveDir 결정
         File saveDir;
-        String exePath = AppLogger.getExeFilePath();
+        String exePath = !EXE_PATH.isEmpty() ? EXE_PATH : AppLogger.getExeFilePath();
         if (exePath != null && !exePath.isEmpty() && !exePath.equals("(unknown)")) {
             saveDir = new File(exePath).getParentFile();
 			} else {
@@ -2558,6 +2646,28 @@ public class KootPanKing extends JFrame {
         config.setProperty("borderAlpha",   String.valueOf(borderAlpha));
         config.setProperty("borderVisible", String.valueOf(borderVisible));
 		
+        // app.exePath 는 부모/자식 모두 저장 (SplashWindow 업그레이드에서 사용)
+        // ★ 우선순위: EXE_PATH(resolveAppDir .exe 직접 감지) > AppLogger(launch4j땐 .jar 반환 가능) > appRestarter 캐시(이전 ini값)
+        //    AppLogger.getExeFilePath() 는 launch4j 환경에서 sun.java.command 에 .jar 가 들어와 .jar 를 반환할 수 있으므로 2순위
+        {
+            String _ep = EXE_PATH;
+            if (_ep == null || _ep.isEmpty()) {
+                String _al = AppLogger.getExeFilePath();
+                if (_al != null && !_al.isEmpty() && !_al.equals("(unknown)")) _ep = _al;
+            }
+            if (_ep == null) _ep = "";
+            if (_ep.isEmpty() && appRestarter != null) _ep = appRestarter.getCachedExePath();
+            if (!_ep.isEmpty()) {
+                config.setProperty("app.exePath", _ep);
+                // appRestarter 캐시도 최신값으로 동기화
+                if (appRestarter != null && !appRestarter.getCachedExePath().equals(_ep)) {
+                    appRestarter.setCachedPaths(_ep,
+                        config.getProperty("app.javawPath", ""),
+                        config.getProperty("app.jsaPath",   ""));
+                }
+            }
+        }
+		
         // ── 부모 전용 항목 (자식은 저장하지 않음) ────────────────────
         if (!isChild) {
             config.setProperty("startHidden",  String.valueOf(!isVisible()));
@@ -2578,7 +2688,6 @@ public class KootPanKing extends JFrame {
 			config.getProperty("naver.caldav.id",       ""));
             config.setProperty("naver.caldav.password",
 			config.getProperty("naver.caldav.password", ""));
-            if (!appRestarter.getCachedExePath().isEmpty())   config.setProperty("app.exePath",   appRestarter.getCachedExePath());
             if (!appRestarter.getCachedJavawPath().isEmpty()) config.setProperty("app.javawPath", appRestarter.getCachedJavawPath());
             if (!appRestarter.getCachedJsaPath().isEmpty())   config.setProperty("app.jsaPath",   appRestarter.getCachedJsaPath());
             config.setProperty("camera.url",      cameraUrl);
@@ -2779,7 +2888,11 @@ public class KootPanKing extends JFrame {
         System.out.println("[ " + thisProgramName + " ] [main] start");
         AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 시작");
         ToolManager.init(APP_DIR); // ★ yt-dlp / ffmpeg 준비 (백그라운드)
-        try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
+		
+		System.out.println("[DEBUG] sun.java.command=" + System.getProperty("sun.java.command"));
+		System.out.println("[DEBUG] user.dir=" + System.getProperty("user.dir"));
+		
+		try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
         catch (Exception ignored) {}
 		
         // ── SplashWindow : 시계보다 먼저 메인 윈도우 표시 ────────
@@ -2787,6 +2900,7 @@ public class KootPanKing extends JFrame {
             @Override
             public void run() {
                 KootPanKing clock = new KootPanKing();
+                clock.saveConfig(); // ★ 시작 시 app.exePath 무조건 ini 저장
                 // ── mainWindow=true 인 경우에만 SplashWindow 표시 ──
                 if (clock.showMainWindow) {
                     splashInstance = initSplashWindow();
@@ -2836,61 +2950,61 @@ public class KootPanKing extends JFrame {
                 if (logPath == null || logPath.isEmpty()) {
                     JOptionPane.showMessageDialog(splash, "로그 파일 경로를 찾을 수 없습니다.", "Log조회", JOptionPane.WARNING_MESSAGE);
                     return;
-                }
+				}
                 java.io.File logFile = new java.io.File(logPath);
                 if (!logFile.exists()) {
                     JOptionPane.showMessageDialog(splash, "로그 파일이 존재하지 않습니다.\n" + logPath, "Log조회", JOptionPane.WARNING_MESSAGE);
                     return;
-                }
+				}
                 try {
                     String logText;
                     try (java.io.BufferedReader br = new java.io.BufferedReader(
-                            new java.io.InputStreamReader(new java.io.FileInputStream(logFile), "UTF-8"))) {
-                        StringBuilder sb = new StringBuilder(); String line;
-                        while ((line = br.readLine()) != null) sb.append(line).append("\n");
-                        logText = sb.toString();
+					new java.io.InputStreamReader(new java.io.FileInputStream(logFile), "UTF-8"))) {
+					StringBuilder sb = new StringBuilder(); String line;
+					while ((line = br.readLine()) != null) sb.append(line).append("\n");
+					logText = sb.toString();
                     }
                     String escaped = logText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
                     java.io.File htmlFile = java.io.File.createTempFile("applog_", ".html");
                     htmlFile.deleteOnExit();
                     try (java.io.PrintWriter pw = new java.io.PrintWriter(
-                            new java.io.OutputStreamWriter(new java.io.FileOutputStream(htmlFile), "UTF-8"))) {
-                        pw.println("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>끝판왕 로그</title><style>");
-                        pw.println("body{font-family:'Consolas','Malgun Gothic',monospace;background:#0d0d0d;color:#c8ffc8;padding:20px;line-height:1.6;}");
-                        pw.println("pre{white-space:pre-wrap;font-size:13px;}</style></head><body><pre>");
-                        pw.println(escaped); pw.println("</pre></body></html>");
+					new java.io.OutputStreamWriter(new java.io.FileOutputStream(htmlFile), "UTF-8"))) {
+					pw.println("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>끝판왕 로그</title><style>");
+					pw.println("body{font-family:'Consolas','Malgun Gothic',monospace;background:#0d0d0d;color:#c8ffc8;padding:20px;line-height:1.6;}");
+					pw.println("pre{white-space:pre-wrap;font-size:13px;}</style></head><body><pre>");
+					pw.println(escaped); pw.println("</pre></body></html>");
                     }
                     java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
-                } catch (Exception ex) {
+					} catch (Exception ex) {
                     JOptionPane.showMessageDialog(splash, "로그 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
-                }
-            }
+				}
+			}
             @Override public void deleteOldLogs() {
                 String logPath = AppLogger.getLogFilePath();
                 if (logPath == null || logPath.isEmpty()) {
                     JOptionPane.showMessageDialog(splash, "로그 파일 경로를 찾을 수 없습니다.", "Log삭제", JOptionPane.WARNING_MESSAGE);
                     return;
-                }
+				}
                 java.io.File logDir = new java.io.File(logPath).getParentFile();
                 if (logDir == null || !logDir.exists()) {
                     JOptionPane.showMessageDialog(splash, "로그 폴더를 찾을 수 없습니다.", "Log삭제", JOptionPane.WARNING_MESSAGE);
                     return;
-                }
+				}
                 java.io.File currentLog = new java.io.File(logPath);
                 java.io.File[] oldFiles = logDir.listFiles(f ->
-                    f.isFile() && f.getName().endsWith(".txt") && !f.getAbsolutePath().equals(currentLog.getAbsolutePath()));
+				f.isFile() && f.getName().endsWith(".txt") && !f.getAbsolutePath().equals(currentLog.getAbsolutePath()));
                 if (oldFiles == null || oldFiles.length == 0) {
                     JOptionPane.showMessageDialog(splash, "삭제할 지난 로그 파일이 없습니다.", "Log삭제", JOptionPane.INFORMATION_MESSAGE);
                     return;
-                }
+				}
                 int ans = JOptionPane.showConfirmDialog(splash,
                     "지난 로그 파일 " + oldFiles.length + "개를 삭제하시겠습니까?\n폴더: " + logDir.getAbsolutePath(),
-                    "지난Log데이타 삭제", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+				"지난Log데이타 삭제", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
                 if (ans != JOptionPane.YES_OPTION) return;
                 int deleted = 0;
                 for (java.io.File f : oldFiles) { if (f.delete()) deleted++; }
                 JOptionPane.showMessageDialog(splash, deleted + "개 삭제 완료.", "Log삭제", JOptionPane.INFORMATION_MESSAGE);
-            }
+			}
             @Override public String getLogFilePath() { return AppLogger.getLogFilePath(); }
             @Override public void showConfigFile() {
                 java.io.File f = new java.io.File(clock.myConfigFile);

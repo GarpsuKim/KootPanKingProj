@@ -229,7 +229,7 @@ public class AppRestarter {
                         if (exeFiles != null) {
                             for (java.io.File ef : exeFiles) {
                                 String n = ef.getName().toLowerCase();
-                                if (n.contains("analog") || n.contains("clock")) {
+                                if (n.contains("kootpanking")) {
                                     exePath = ef.getAbsolutePath();
                                     AppLogger.writeToFile("[Restart] jar→exe 전환: " + exePath);
                                     break outer;
@@ -322,7 +322,7 @@ public class AppRestarter {
             if (exeFiles != null && exeFiles.length >= 1) {
                 for (java.io.File ef : exeFiles) {
                     String n = ef.getName().toLowerCase();
-                    if (n.contains("analog") || n.contains("clock")) {
+                    if (n.contains("kootpanking")) {
                         AppLogger.writeToFile("[Restart] exe 탐색(이름매칭): " + ef.getAbsolutePath());
                         return ef.getAbsolutePath();
                     }

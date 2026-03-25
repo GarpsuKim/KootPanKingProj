@@ -40,6 +40,12 @@ public class GoogleCalendarService {
     private static final String TOKEN_URL         = "https://oauth2.googleapis.com/token";
     private static final String CALENDAR_API      = "https://www.googleapis.com/calendar/v3";
 
+    // ── APP_DIR 주입 (KootPanKing.APP_DIR 을 생성 후 setAppDir() 로 주입) ──
+    // resolveFile() 이 독자적으로 경로를 탐색하면 KootPanKing 이 APPDATA 폴더로
+    // 우회한 경우 다른 폴더를 가리켜 credentials/token 을 찾지 못한다.
+    // KootPanKing 에서 calendarService.setAppDir(APP_DIR) 를 호출해 주입한다.
+    private String appDir = "";
+
     // ── OAuth 토큰 상태 ────────────────────────────────────────────
     private String clientId     = "";
     private String clientSecret = "";
@@ -48,6 +54,11 @@ public class GoogleCalendarService {
     private long   expiresAt    = 0;   // System.currentTimeMillis() 기준
 
     private boolean initialized = false;
+
+    /** KootPanKing.APP_DIR 을 주입한다. init() 호출 전에 반드시 설정해야 한다. */
+    public void setAppDir(String dir) {
+        this.appDir = (dir != null) ? dir : "";
+    }
 
     // ── 초기화 ────────────────────────────────────────────────────
 
@@ -94,38 +105,31 @@ public class GoogleCalendarService {
     public boolean isInitialized() { return initialized; }
 
     /**
-     * credentials.json 준비 여부 확인 + 자동 복사.
+     * credentials.json 준비 여부 확인.
      *
-     * 1) settings/credentials.json 이 있으면 → true
-     * 2) 없으면 C:\temp\credentials.json 확인
-     *    → 있으면 settings/ 폴더로 복사 후 true
-     *    → 없으면 false (로그인 생략)
+     * 1) appDir/settings/credentials.json 이 있으면 → true
+     * 2) 없으면 false (로그인 생략)
+     *
+     * ★ static → 인스턴스 메서드로 변경.
+     *    KootPanKing 에서 setAppDir(APP_DIR) 주입 후 호출해야 정확한 경로를 사용한다.
+     *    하드코딩된 C:\\temp 폴백 제거.
      */
-    public static boolean credentialsExist() {
+    public boolean credentialsExist() {
         File dest = resolveFile(CREDENTIALS_FILE);
         System.out.println("[GCalendar] credentials.json 탐색 경로: " + dest.getAbsolutePath());
         if (dest.exists()) return true;
+        System.out.println("[GCalendar] credentials.json 없음 - Calendar 초기화 생략");
+        return false;
+    }
 
-        // C:\temp\credentials.json 확인
-        File backup = new File("C:\\temp\\credentials.json");
-        if (!backup.exists()) {
-            System.out.println("[GCalendar] credentials.json 없음 - Calendar 초기화 생략");
-            return false;
-        }
-
-        // 실행 폴더로 복사
-        try {
-            dest.getParentFile().mkdirs();
-            java.nio.file.Files.copy(
-                backup.toPath(), dest.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            System.out.println("[GCalendar] credentials.json 복사 완료: "
-                + backup.getAbsolutePath() + " → " + dest.getAbsolutePath());
-            return true;
-        } catch (Exception e) {
-            System.out.println("[GCalendar] credentials.json 복사 실패: " + e.getMessage());
-            return false;
-        }
+    /**
+     * 하위 호환용 static 오버로드.
+     * KootPanKing 외부에서 appDir 없이 호출하는 기존 코드를 위해 유지.
+     */
+    public static boolean credentialsExist(String appDirPath) {
+        GoogleCalendarService tmp = new GoogleCalendarService();
+        tmp.setAppDir(appDirPath);
+        return tmp.credentialsExist();
     }
 
     /**
@@ -572,8 +576,16 @@ public class GoogleCalendarService {
         return sb.toString();
     }
 
-    /** 실행 파일 폴더 기준으로 파일 경로 해석 */
-    private static File resolveFile(String name) {
+    /**
+     * 실행 파일 폴더 기준으로 파일 경로 해석.
+     * ★ static → 인스턴스 메서드로 변경.
+     *   appDir 가 주입되어 있으면 최우선 사용 → KootPanKing 이 APPDATA 로 우회해도
+     *   동일한 폴더를 가리킨다.
+     */
+    private File resolveFile(String name) {
+        // ① KootPanKing.APP_DIR 주입값 우선
+        if (!appDir.isEmpty()) return new File(appDir, name);
+        // ② sun.java.command
         try {
             String sc = System.getProperty("sun.java.command", "").trim();
             String first = sc.split("\\s+")[0];
@@ -582,6 +594,7 @@ public class GoogleCalendarService {
                 if (f.getParentFile() != null) return new File(f.getParentFile(), name);
             }
         } catch (Exception ignored) {}
+        // ③ CodeSource
         try {
             File f = new File(GoogleCalendarService.class
                     .getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
