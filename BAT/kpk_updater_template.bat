@@ -56,7 +56,7 @@ goto :cleanup
 :cleanup
 echo   aaaaaaaaaaa
 pause
-echo [kpk_updater] cleanup start >> "{{LOG_PATH}}"
-rmdir /S /Q "{{TMP_DIR}}"
-echo [kpk_updater] done >> "{{LOG_PATH}}"
-(goto) 2>nul & del "%~f0"
+rem echo [kpk_updater] cleanup start >> "{{LOG_PATH}}"
+rem rmdir /S /Q "{{TMP_DIR}}"
+rem echo [kpk_updater] done >> "{{LOG_PATH}}"
+rem (goto) 2>nul & del "%~f0"
