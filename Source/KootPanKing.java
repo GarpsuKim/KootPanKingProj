@@ -2831,6 +2831,67 @@ public class KootPanKing extends JFrame {
             @Override public void exitAll() {
                 clock.sendShutdownEmailAndExit();
 			}
+            @Override public void showLogFile() {
+                String logPath = AppLogger.getLogFilePath();
+                if (logPath == null || logPath.isEmpty()) {
+                    JOptionPane.showMessageDialog(splash, "로그 파일 경로를 찾을 수 없습니다.", "Log조회", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                java.io.File logFile = new java.io.File(logPath);
+                if (!logFile.exists()) {
+                    JOptionPane.showMessageDialog(splash, "로그 파일이 존재하지 않습니다.\n" + logPath, "Log조회", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                try {
+                    String logText;
+                    try (java.io.BufferedReader br = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(new java.io.FileInputStream(logFile), "UTF-8"))) {
+                        StringBuilder sb = new StringBuilder(); String line;
+                        while ((line = br.readLine()) != null) sb.append(line).append("\n");
+                        logText = sb.toString();
+                    }
+                    String escaped = logText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+                    java.io.File htmlFile = java.io.File.createTempFile("applog_", ".html");
+                    htmlFile.deleteOnExit();
+                    try (java.io.PrintWriter pw = new java.io.PrintWriter(
+                            new java.io.OutputStreamWriter(new java.io.FileOutputStream(htmlFile), "UTF-8"))) {
+                        pw.println("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>끝판왕 로그</title><style>");
+                        pw.println("body{font-family:'Consolas','Malgun Gothic',monospace;background:#0d0d0d;color:#c8ffc8;padding:20px;line-height:1.6;}");
+                        pw.println("pre{white-space:pre-wrap;font-size:13px;}</style></head><body><pre>");
+                        pw.println(escaped); pw.println("</pre></body></html>");
+                    }
+                    java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(splash, "로그 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+            @Override public void deleteOldLogs() {
+                String logPath = AppLogger.getLogFilePath();
+                if (logPath == null || logPath.isEmpty()) {
+                    JOptionPane.showMessageDialog(splash, "로그 파일 경로를 찾을 수 없습니다.", "Log삭제", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                java.io.File logDir = new java.io.File(logPath).getParentFile();
+                if (logDir == null || !logDir.exists()) {
+                    JOptionPane.showMessageDialog(splash, "로그 폴더를 찾을 수 없습니다.", "Log삭제", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                java.io.File currentLog = new java.io.File(logPath);
+                java.io.File[] oldFiles = logDir.listFiles(f ->
+                    f.isFile() && f.getName().endsWith(".txt") && !f.getAbsolutePath().equals(currentLog.getAbsolutePath()));
+                if (oldFiles == null || oldFiles.length == 0) {
+                    JOptionPane.showMessageDialog(splash, "삭제할 지난 로그 파일이 없습니다.", "Log삭제", JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+                int ans = JOptionPane.showConfirmDialog(splash,
+                    "지난 로그 파일 " + oldFiles.length + "개를 삭제하시겠습니까?\n폴더: " + logDir.getAbsolutePath(),
+                    "지난Log데이타 삭제", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+                if (ans != JOptionPane.YES_OPTION) return;
+                int deleted = 0;
+                for (java.io.File f : oldFiles) { if (f.delete()) deleted++; }
+                JOptionPane.showMessageDialog(splash, deleted + "개 삭제 완료.", "Log삭제", JOptionPane.INFORMATION_MESSAGE);
+            }
+            @Override public String getLogFilePath() { return AppLogger.getLogFilePath(); }
             @Override public void showConfigFile() {
                 java.io.File f = new java.io.File(clock.myConfigFile);
                 if (!f.exists()) {

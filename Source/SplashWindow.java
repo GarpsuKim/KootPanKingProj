@@ -81,6 +81,15 @@ public class SplashWindow extends JFrame {
         /** File → Exit : 프로그램 완전 종료 */
         void exitAll();
 		
+        /** Help → Log조회 : 현재 로그 파일을 브라우저로 표시 */
+        void showLogFile();
+		
+        /** Help → 지난Log데이타 삭제 : log/ 폴더의 이전(오늘 제외) 로그 파일 삭제 */
+        void deleteOldLogs();
+		
+        /** 현재 로그 파일 경로 */
+        String getLogFilePath();
+		
         /** Help → 기본설정파일 : ini 파일 표시 */
         void showConfigFile();
 		
@@ -107,23 +116,23 @@ public class SplashWindow extends JFrame {
 		
         /** 도구 → 텔레그램 서브메뉴 */
         JMenu buildTelegramMenu();
-
+		
         /** ini config 값 읽기 (key 없으면 defaultValue 반환) */
         String getConfig(String key, String defaultValue);
-
+		
         /**
-         * ini config 값 여러 개를 한 번에 쓰고 파일 저장.
-         * 기존 setConfigAndSave(key, value) 를 두 번 호출하면 파일을 두 번 쓰는 문제를
-         * 해결하기 위해 추가. 구현체에서 모든 값을 메모리에 반영한 뒤 파일을 1회만 저장한다.
-         *
-         * @param entries  [key, value] 쌍의 가변 인자 (반드시 짝수 개)
-         */
+			* ini config 값 여러 개를 한 번에 쓰고 파일 저장.
+			* 기존 setConfigAndSave(key, value) 를 두 번 호출하면 파일을 두 번 쓰는 문제를
+			* 해결하기 위해 추가. 구현체에서 모든 값을 메모리에 반영한 뒤 파일을 1회만 저장한다.
+			*
+			* @param entries  [key, value] 쌍의 가변 인자 (반드시 짝수 개)
+		*/
         void setMultipleConfigAndSave(String... entries);
-
+		
         /**
-         * ini config 값 1개 쓰기 + 파일 저장 (하위 호환용).
-         * 2개 이상 저장 시에는 setMultipleConfigAndSave 를 사용할 것.
-         */
+			* ini config 값 1개 쓰기 + 파일 저장 (하위 호환용).
+			* 2개 이상 저장 시에는 setMultipleConfigAndSave 를 사용할 것.
+		*/
         void setConfigAndSave(String key, String value);
 	}
     // ═══════════════════════════════════════════════════════════
@@ -259,11 +268,11 @@ public class SplashWindow extends JFrame {
         bar.add(buildHelpMenu());
         return bar;
 	}
-
-
+	
+	
     private JMenu buildGlobalMenu() {
-	        JMenu globalMenu = makeMenu("세계시계");
- 
+		JMenu globalMenu = makeMenu("세계시계");
+		
         // ── Global ────────────────────────────────────────────────
         // clockHost 주입 전엔 비활성 JMenuItem, 주입 후엔 JMenu 로 교체
         if (clockHost != null) {
@@ -273,16 +282,16 @@ public class SplashWindow extends JFrame {
             JMenuItem globalDisabled = makeMenuItem("🌍 Global", "시계 초기화 후 사용 가능");
             globalDisabled.setEnabled(false);
 		}
-	
-	        return globalMenu;
+		
+		return globalMenu;
 	}
-
+	
     // ── [도구] 메뉴 ──────────────────────────────────────────────
 	
     private JMenu buildToolsMenu() {
         JMenu toolsMenu = makeMenu("도구");
-
-
+		
+		
         // ── 차임벨 설정 ───────────────────────────────────────────
         JMenuItem chimeItem = makeMenuItem("차임벨 설정...", null);
         chimeItem.addActionListener(e -> {
@@ -307,7 +316,7 @@ public class SplashWindow extends JFrame {
             if (gmailMenu != null) {
                 gmailMenu.setEnabled(false); // [배포] 비활성화
                 toolsMenu.add(gmailMenu);
-            }
+			}
 			} else {
             toolsMenu.add(makeMenuItem("Gmail / Calendar", null)).setEnabled(false);
 		}
@@ -318,7 +327,7 @@ public class SplashWindow extends JFrame {
             if (kakaoMenu != null) {
                 kakaoMenu.setEnabled(false); // [배포] 비활성화
                 toolsMenu.add(kakaoMenu);
-            }
+			}
 			} else {
             toolsMenu.add(makeMenuItem("카카오톡...", null)).setEnabled(false);
 		}
@@ -329,7 +338,7 @@ public class SplashWindow extends JFrame {
             if (tgMenu != null) {
                 tgMenu.setEnabled(false); // [배포] 비활성화
                 toolsMenu.add(tgMenu);
-            }
+			}
 			} else {
             toolsMenu.add(makeMenuItem("텔레그램", null)).setEnabled(false);
 		}
@@ -362,6 +371,11 @@ public class SplashWindow extends JFrame {
             lifeMenu.add(li);
 		}
         lifeMenu.addSeparator();
+        // ── 현재위치 ──────────────────────────────────────────────
+        JMenuItem locationItem = makeMenuItem("📍 현재위치", "브라우저 위치정보로 현재 주소를 조회합니다");
+        locationItem.addActionListener(e -> doShowLocation());
+        lifeMenu.add(locationItem);
+        lifeMenu.addSeparator();
         // ── 만년달력 ─────────────────────────────────────────────
         JMenuItem calendarItem = makeMenuItem("📅 만년달력", "만년달력을 브라우저로 엽니다");
         calendarItem.addActionListener(e -> openCalendarHtml());
@@ -372,57 +386,285 @@ public class SplashWindow extends JFrame {
         lifeMenu.add(calendarUpdateItem);
         return lifeMenu;
 	}
-
+	
+    // ── 현재위치 헬퍼 메서드 ─────────────────────────────────────
+	
+    private static final String KAKAO_API_KEY = "95fabf11da95950af909e81cb9083210";
+    private static final int LOCATION_PORT    = 9999;
+	
+    /**
+		* location.html 을 브라우저로 열고 내장 HTTP 서버로 위경도를 수신한다.
+		* 수신 성공 시 Kakao API 로 주소 변환 후 다이얼로그 + 로그에 출력한다.
+	*/
+    private void doShowLocation() {
+        // location.html 경로: JAR 옆 폴더
+        java.io.File baseDir = null;
+        try {
+            java.security.CodeSource cs =
+			SplashWindow.class.getProtectionDomain().getCodeSource();
+            if (cs != null)
+			baseDir = new java.io.File(cs.getLocation().toURI()).getParentFile();
+		} catch (Exception ignored) {}
+        if (baseDir == null) baseDir = new java.io.File(".");
+		
+        java.io.File htmlFile = new java.io.File(baseDir, "location.html");
+        if (!htmlFile.exists()) {
+            log("location.html 없음 — GitHub에서 다운로드 중...");
+            final java.io.File fDest = htmlFile;
+            new Thread(() -> {
+                try {
+                    String rawUrl =
+					"https://raw.githubusercontent.com/GarpsuKim/Calendar_Lunar_-_HTML/main/location.html";
+                    java.net.HttpURLConnection con =
+					(java.net.HttpURLConnection) new java.net.URI(rawUrl).toURL().openConnection();
+                    con.setConnectTimeout(10000);
+                    con.setReadTimeout(30000);
+                    con.connect();
+                    int code = con.getResponseCode();
+                    if (code != 200) {
+                        con.disconnect();
+                        SwingUtilities.invokeLater(() -> {
+                            log("❌ location.html 다운로드 실패 (HTTP " + code + ")");
+                            JOptionPane.showMessageDialog(SplashWindow.this,
+                                "location.html 다운로드 실패 (HTTP " + code + ")",
+							"현재위치", JOptionPane.ERROR_MESSAGE);
+						});
+                        return;
+					}
+                    try (java.io.InputStream in = con.getInputStream();
+						java.io.FileOutputStream out = new java.io.FileOutputStream(fDest)) {
+                        byte[] buf = new byte[8192]; int n;
+                        while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+					}
+                    con.disconnect();
+                    SwingUtilities.invokeLater(() -> {
+                        log("✅ location.html 다운로드 완료 → " + fDest.getAbsolutePath());
+                        doShowLocation();
+					});
+					} catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> {
+                        log("❌ location.html 다운로드 오류: " + ex.getMessage());
+                        JOptionPane.showMessageDialog(SplashWindow.this,
+                            "다운로드 오류: " + ex.getMessage(),
+						"현재위치", JOptionPane.ERROR_MESSAGE);
+					});
+				}
+			}, "LocationDownload").start();
+            return;
+		}
+		
+        log("📍 현재위치 조회 시작...");
+		
+        new Thread(() -> {
+            try (java.net.ServerSocket server = new java.net.ServerSocket(LOCATION_PORT)) {
+                server.setSoTimeout(60000);
+				
+                // 브라우저로 location.html 열기
+                final java.io.File fHtml = htmlFile;
+                SwingUtilities.invokeLater(() -> {
+                    try {
+                        java.awt.Desktop.getDesktop().browse(fHtml.toURI());
+                        log("브라우저에서 '현재 위치 가져오기' 버튼을 눌러주세요.");
+						} catch (Exception ex) {
+                        log("브라우저 열기 실패: " + ex.getMessage());
+					}
+				});
+				
+                // 위경도 수신
+                double[] coords = locationWaitForCoords(server);
+                if (coords == null) {
+                    SwingUtilities.invokeLater(() -> {
+                        log("❌ 위경도 수신 실패 (60초 초과)");
+                        JOptionPane.showMessageDialog(SplashWindow.this,
+                            "위경도를 받지 못했습니다.\n브라우저에서 위치 권한을 허용하고 버튼을 눌러주세요.",
+						"현재위치", JOptionPane.WARNING_MESSAGE);
+					});
+                    return;
+				}
+				
+                double lat = coords[0], lon = coords[1];
+                SwingUtilities.invokeLater(() ->
+				log(String.format("✅ 수신: %.6f, %.6f — 주소 변환 중...", lat, lon)));
+				
+                // Kakao 역지오코딩
+                String address = locationReverseGeocode(lat, lon);
+				
+                SwingUtilities.invokeLater(() -> {
+                    if (address != null) {
+                        log("현재위치: " + address);
+						} else {
+                        log("❌ 주소 변환 실패");
+                        JOptionPane.showMessageDialog(SplashWindow.this,
+                            String.format("주소 변환 실패%n위도 %.6f  /  경도 %.6f", lat, lon),
+						"현재위치", JOptionPane.WARNING_MESSAGE);
+					}
+                    // 카카오 지도 브라우저 열기
+                    try {
+                        String mapUrl = String.format(
+						"https://map.kakao.com/link/map/현재위치,%.6f,%.6f", lat, lon);
+                        java.awt.Desktop.getDesktop().browse(new java.net.URI(mapUrl));
+                        log("🗺 카카오 지도 열기: " + mapUrl);
+						} catch (Exception ex) {
+                        log("카카오 지도 열기 실패: " + ex.getMessage());
+					}
+				});
+				
+				} catch (java.net.BindException ex) {
+                SwingUtilities.invokeLater(() -> {
+                    log("❌ 포트 " + LOCATION_PORT + " 사용 중 — 이미 실행 중이거나 다른 프로그램이 점유 중");
+                    JOptionPane.showMessageDialog(SplashWindow.this,
+                        "포트 " + LOCATION_PORT + "이 이미 사용 중입니다.\n잠시 후 다시 시도하세요.",
+					"현재위치", JOptionPane.ERROR_MESSAGE);
+				});
+				} catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> log("현재위치 오류: " + ex.getMessage()));
+			}
+		}, "LocationThread").start();
+	}
+	
+    /** HTTP GET /location?lat=xx&lon=xx 한 건 수신 후 [lat, lon] 반환 */
+    private double[] locationWaitForCoords(java.net.ServerSocket server) {
+        try {
+            java.net.Socket client = server.accept();
+			
+            // CORS 응답 먼저 전송
+            java.io.PrintWriter w = new java.io.PrintWriter(client.getOutputStream());
+            w.println("HTTP/1.1 200 OK");
+            w.println("Access-Control-Allow-Origin: *");
+            w.println("Content-Type: text/plain");
+            w.println();
+            w.println("OK");
+            w.flush();
+			
+            java.io.BufferedReader r = new java.io.BufferedReader(
+			new java.io.InputStreamReader(client.getInputStream()));
+            String line = r.readLine();
+            client.close();
+			
+            if (line == null || !line.contains("lat=")) return null;
+            String query = line.split(" ")[1];           // /location?lat=..&lon=..
+            double lat = 0, lon = 0;
+            for (String p : query.split("[?&]")) {
+                if (p.startsWith("lat=")) lat = Double.parseDouble(p.substring(4));
+                if (p.startsWith("lon=")) lon = Double.parseDouble(p.substring(4));
+			}
+            return new double[]{lat, lon};
+			
+			} catch (java.net.SocketTimeoutException e) {
+            return null;
+			} catch (Exception e) {
+            return null;
+		}
+	}
+	
+    /** Kakao coord2regioncode API → 행정동 주소 문자열 */
+    private String locationReverseGeocode(double lat, double lon) {
+        try {
+            String urlStr = String.format(
+                "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=%.6f&y=%.6f",
+			lon, lat);
+            java.net.HttpURLConnection conn =
+			(java.net.HttpURLConnection) new java.net.URL(urlStr).openConnection();
+            conn.setRequestProperty("Authorization", "KakaoAK " + KAKAO_API_KEY);
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+			
+            int code = conn.getResponseCode();
+            java.io.InputStream is;
+            try { is = conn.getInputStream(); } catch (Exception e) { is = conn.getErrorStream(); }
+            if (is == null) return null;
+            java.io.BufferedReader br = new java.io.BufferedReader(
+			new java.io.InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            String ln;
+            while ((ln = br.readLine()) != null) sb.append(ln);
+            conn.disconnect();
+            if (code == 401) return null;
+			
+            String json = sb.toString();
+            String addr = locationExtractAddress(json, "H");
+            if (addr == null || addr.isEmpty()) addr = locationExtractAddress(json, "B");
+            return addr;
+		} catch (Exception e) { return null; }
+	}
+	
+    private String locationExtractAddress(String json, String regionType) {
+        String key = "\"region_type\":\"" + regionType + "\"";
+        int ti = json.indexOf(key);
+        if (ti < 0) return null;
+        int bs = json.lastIndexOf("{", ti);
+        int be = json.indexOf("}", ti);
+        if (bs < 0 || be < 0) return null;
+        String block = json.substring(bs, be + 1);
+        String r1 = locationParseStr(block, "region_1depth_name");
+        String r2 = locationParseStr(block, "region_2depth_name");
+        String r3 = locationParseStr(block, "region_3depth_name");
+        if (r1.isEmpty()) return null;
+        StringBuilder out = new StringBuilder(r1);
+        if (!r2.isEmpty()) out.append(" ").append(r2);
+        if (!r3.isEmpty()) out.append(" ").append(r3);
+        return out.toString();
+	}
+	
+    private String locationParseStr(String json, String key) {
+        String search = "\"" + key + "\":\"";
+        int idx = json.indexOf(search);
+        if (idx < 0) return "";
+        int s = idx + search.length();
+        int e = json.indexOf("\"", s);
+        return e < 0 ? "" : json.substring(s, e);
+	}
+	
     // ── 만년달력 헬퍼 메서드 ─────────────────────────────────────
-
+	
     /** 실행파일 옆 폴더의 calendar.html File 객체를 반환한다. */
     private java.io.File getCalendarFile() {
         java.io.File baseDir = null;
         try {
             java.security.CodeSource cs =
-                SplashWindow.class.getProtectionDomain().getCodeSource();
+			SplashWindow.class.getProtectionDomain().getCodeSource();
             if (cs != null) {
                 baseDir = new java.io.File(cs.getLocation().toURI()).getParentFile();
-            }
-        } catch (Exception ignored) {}
+			}
+		} catch (Exception ignored) {}
         if (baseDir == null) baseDir = new java.io.File(".");
         return new java.io.File(baseDir, "calendar.html");
-    }
-
+	}
+	
     /**
-     * calendar.html 이 존재하면 기본 브라우저로 열고,
-     * 없으면 "[만년달력 갱신]을 먼저 실행하세요" 다이얼로그를 표시한다.
-     */
+		* calendar.html 이 존재하면 기본 브라우저로 열고,
+		* 없으면 "[만년달력 갱신]을 먼저 실행하세요" 다이얼로그를 표시한다.
+	*/
     private void openCalendarHtml() {
         java.io.File calFile = getCalendarFile();
         if (!calFile.exists()) {
             JOptionPane.showMessageDialog(this,
                 "[만년달력 갱신]을 먼저 실행하세요.",
-                "만년달력", JOptionPane.WARNING_MESSAGE);
+			"만년달력", JOptionPane.WARNING_MESSAGE);
             return;
-        }
+		}
         try {
             java.awt.Desktop.getDesktop().browse(calFile.toURI());
-        } catch (Exception ex) {
+			} catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
-                "브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
+			"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+	
     /**
-     * 확인 다이얼로그 후 GitHub 에서 Calendar.html 을 다운로드하여
-     * 기본 폴더에 calendar.html 로 저장한다.
-     */
+		* 확인 다이얼로그 후 GitHub 에서 Calendar.html 을 다운로드하여
+		* 기본 폴더에 calendar.html 로 저장한다.
+	*/
     private void updateCalendarHtml() {
         int choice = JOptionPane.showConfirmDialog(this,
             "임시 공휴일 추가 등 만년 달력을 자동 갱신합니다.",
-            "만년달력 갱신", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+		"만년달력 갱신", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (choice != JOptionPane.YES_OPTION) return;
-
+		
         final String DOWNLOAD_URL =
-            "https://raw.githubusercontent.com/GarpsuKim/Calendar_Lunar_-_HTML/main/Calendar.html";
+		"https://raw.githubusercontent.com/GarpsuKim/Calendar_Lunar_-_HTML/main/Calendar.html";
         final java.io.File destFile = getCalendarFile();
-
+		
         new Thread(() -> {
             try {
                 java.net.URL url = new java.net.URI(DOWNLOAD_URL).toURL();
@@ -435,27 +677,27 @@ public class SplashWindow extends JFrame {
                     con.disconnect();
                     javax.swing.SwingUtilities.invokeLater(() ->
                         JOptionPane.showMessageDialog(this,
-                            "다운로드 실패 (HTTP " + code + ")", "만년달력 갱신", JOptionPane.ERROR_MESSAGE));
-                    return;
-                }
+						"다운로드 실패 (HTTP " + code + ")", "만년달력 갱신", JOptionPane.ERROR_MESSAGE));
+						return;
+				}
                 try (java.io.InputStream in  = con.getInputStream();
-                     java.io.FileOutputStream out = new java.io.FileOutputStream(destFile)) {
+					java.io.FileOutputStream out = new java.io.FileOutputStream(destFile)) {
                     byte[] buf = new byte[8192];
                     int n;
                     while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
-                }
+				}
                 con.disconnect();
                 javax.swing.SwingUtilities.invokeLater(() ->
                     JOptionPane.showMessageDialog(this,
                         "만년달력이 갱신되었습니다.\n저장 위치: " + destFile.getAbsolutePath(),
-                        "만년달력 갱신", JOptionPane.INFORMATION_MESSAGE));
-            } catch (Exception ex) {
-                javax.swing.SwingUtilities.invokeLater(() ->
-                    JOptionPane.showMessageDialog(this,
-                        "다운로드 오류: " + ex.getMessage(), "만년달력 갱신", JOptionPane.ERROR_MESSAGE));
-            }
-        }, "CalendarUpdate").start();
-    }
+					"만년달력 갱신", JOptionPane.INFORMATION_MESSAGE));
+					} catch (Exception ex) {
+					javax.swing.SwingUtilities.invokeLater(() ->
+						JOptionPane.showMessageDialog(this,
+						"다운로드 오류: " + ex.getMessage(), "만년달력 갱신", JOptionPane.ERROR_MESSAGE));
+			}
+		}, "CalendarUpdate").start();
+	}
 	
     // ── [File] 메뉴 ──────────────────────────────────────────────
 	
@@ -489,7 +731,7 @@ public class SplashWindow extends JFrame {
         superDirItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_D, InputEvent.CTRL_DOWN_MASK));
         superDirItem.addActionListener(e -> SuperDir.open(SplashWindow.this));
         fileMenu.add(superDirItem);
-
+		
         fileMenu.addSeparator();
         // ── Close ─────────────────────────────────────────────────
         JMenuItem closeItem = makeMenuItem("Close", "이 창을 닫습니다 (시계는 유지)");
@@ -505,7 +747,7 @@ public class SplashWindow extends JFrame {
 		
         return fileMenu;
 	}
-
+	
     // ═══════════════════════════════════════════════════════════
     //  [업무도구] 메뉴 — 사용자 슬롯 등록/수정/삭제/순서변경
     //
@@ -519,78 +761,78 @@ public class SplashWindow extends JFrame {
     //  등록 안 된 슬롯은 "➕ 등록" 하나만 넣는다.
     //  모든 동작이 일반 ActionListener 로 처리되므로 완전히 안정적.
     // ═══════════════════════════════════════════════════════════
-
+	
     private static final int OFFICE_SLOT_COUNT = 20;
-
+	
     private static String slotNameKey(int i) { return "office.slot." + i + ".name"; }
     private static String slotPathKey(int i) { return "office.slot." + i + ".path"; }
-
+	
     private JMenu buildOfficeMenu() {
         JMenu officeMenu = makeMenu("업무도구");
-
+		
         // ── 고정 3종 (레지스트리 자동 연결) ──────────────────────────
         String[][] fixed = {
             { "📊 Excel",  "excel.exe"    },
             { "📝 Word",   "winword.exe"  },
             { "📑 PPT",    "powerpnt.exe" },
-        };
+		};
         for (String[] app : fixed) {
             String label   = app[0];
             String exeName = app[1];
             JMenuItem item = makeMenuItem(label, exeName + " 실행");
             item.addActionListener(e -> launchByRegistry(exeName));
             officeMenu.add(item);
-        }
-
+		}
+		
         officeMenu.addSeparator();
-
+		
         // ── 사용자 슬롯 20개 (각 슬롯 = JMenu 서브메뉴) ──────────────
         for (int i = 0; i < OFFICE_SLOT_COUNT; i++) {
             officeMenu.add(buildSlotMenu(i));
-        }
-
+		}
+		
         return officeMenu;
-    }
-
+	}
+	
     /**
-     * 슬롯 하나를 JMenu(서브메뉴) 로 생성한다.
-     *
-     * 등록된 슬롯  : "📌 앱이름 ▶"  → [▶ 실행] [──] [✏️ 수정] [🗑️ 삭제] [──] [⬆️ 위로] [⬇️ 아래로]
-     * 미등록 슬롯  : "── 빈 슬롯 N ── ▶"  → [➕ 등록]
-     *
-     * JMenuItem 위 MouseListener 우클릭 방식은 Swing MenuSelectionManager 가
-     * 이벤트를 가로채므로 원천적으로 동작하지 않는다.
-     * JMenu 서브메뉴 방식은 표준 ActionListener 만 사용하므로 완전히 안정적이다.
-     */
+		* 슬롯 하나를 JMenu(서브메뉴) 로 생성한다.
+		*
+		* 등록된 슬롯  : "📌 앱이름 ▶"  → [▶ 실행] [──] [✏️ 수정] [🗑️ 삭제] [──] [⬆️ 위로] [⬇️ 아래로]
+		* 미등록 슬롯  : "── 빈 슬롯 N ── ▶"  → [➕ 등록]
+		*
+		* JMenuItem 위 MouseListener 우클릭 방식은 Swing MenuSelectionManager 가
+		* 이벤트를 가로채므로 원천적으로 동작하지 않는다.
+		* JMenu 서브메뉴 방식은 표준 ActionListener 만 사용하므로 완전히 안정적이다.
+	*/
     private JMenu buildSlotMenu(int idx) {
         String name = (clockHost != null) ? clockHost.getConfig(slotNameKey(idx), "") : "";
         String path = (clockHost != null) ? clockHost.getConfig(slotPathKey(idx), "") : "";
         boolean reg = !name.isEmpty() && !path.isEmpty();
-
+		
         JMenu slotMenu = makeMenu(reg ? "📌 " + name : "── 빈 슬롯 " + (idx + 1) + " ──");
         if (reg) slotMenu.setToolTipText(path);
-
+		
         if (reg) {
             // ── ▶ 실행 ───────────────────────────────────────────
             JMenuItem runItem = makeMenuItem("▶  실행", path);
             final String p = path;
             runItem.addActionListener(e -> launchByPath(p));
             slotMenu.add(runItem);
-
+			
             slotMenu.addSeparator();
-
+			
             // ── ✏️ 수정 ───────────────────────────────────────────
             JMenuItem editItem = makeMenuItem("✏️  수정", null);
             editItem.addActionListener(e -> openSlotEditor(idx));
             slotMenu.add(editItem);
-
+			
             // ── 🗑️ 삭제 ───────────────────────────────────────────
             JMenuItem delItem = makeMenuItem("🗑️  삭제", null);
             delItem.addActionListener(e -> deleteSlot(idx, name));
             slotMenu.add(delItem);
-
+			
             slotMenu.addSeparator();
-
+			
             // ── ⬆️ 위로 이동 ──────────────────────────────────────
             JMenuItem upItem = makeMenuItem("⬆️  위로 이동", null);
             upItem.setEnabled(idx > 0);
@@ -598,9 +840,9 @@ public class SplashWindow extends JFrame {
                 int newIdx = idx - 1;
                 swapSlots(idx, newIdx);
                 SwingUtilities.invokeLater(() -> openSlotSubmenu(newIdx));
-            });
+			});
             slotMenu.add(upItem);
-
+			
             // ── ⬇️ 아래로 이동 ────────────────────────────────────
             JMenuItem downItem = makeMenuItem("⬇️  아래로 이동", null);
             downItem.setEnabled(idx < OFFICE_SLOT_COUNT - 1);
@@ -608,19 +850,19 @@ public class SplashWindow extends JFrame {
                 int newIdx = idx + 1;
                 swapSlots(idx, newIdx);
                 SwingUtilities.invokeLater(() -> openSlotSubmenu(newIdx));
-            });
+			});
             slotMenu.add(downItem);
-
-        } else {
+			
+			} else {
             // ── ➕ 등록 ───────────────────────────────────────────
             JMenuItem addItem = makeMenuItem("➕  등록", null);
             addItem.addActionListener(e -> openSlotEditor(idx));
             slotMenu.add(addItem);
-        }
-
+		}
+		
         return slotMenu;
-    }
-
+	}
+	
     /** 레지스트리 경로 조회 후 실행 */
     private void launchByRegistry(String exeName) {
         String path = null;
@@ -629,70 +871,70 @@ public class SplashWindow extends JFrame {
                 "reg", "query",
                 "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\" + exeName,
                 "/ve"
-            ).start();
+			).start();
             java.io.BufferedReader br = new java.io.BufferedReader(
-                new java.io.InputStreamReader(proc.getInputStream(), "MS949"));
+			new java.io.InputStreamReader(proc.getInputStream(), "MS949"));
             String ln;
             while ((ln = br.readLine()) != null) {
                 if (ln.contains("REG_SZ")) { path = ln.split("REG_SZ")[1].trim(); break; }
-            }
-        } catch (Exception ex) { path = null; }
+			}
+		} catch (Exception ex) { path = null; }
         if (path == null || path.isEmpty()) {
             JOptionPane.showMessageDialog(this, exeName + " 경로를 찾을 수 없습니다.",
-                "업무도구", JOptionPane.WARNING_MESSAGE);
+			"업무도구", JOptionPane.WARNING_MESSAGE);
             return;
-        }
+		}
         launchByPath(path);
-    }
-/*
-    //  절대 경로로 실행 
-    private void launchByPath(String path) {
+	}
+	/*
+		//  절대 경로로 실행 
+		private void launchByPath(String path) {
         try { new ProcessBuilder(path).start(); }
         catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "실행 실패: " + ex.getMessage(),
-                "업무도구", JOptionPane.ERROR_MESSAGE);
+		JOptionPane.showMessageDialog(this, "실행 실패: " + ex.getMessage(),
+		"업무도구", JOptionPane.ERROR_MESSAGE);
         }
-    }
+		}
 	*/
-/** 절대 경로로 실행 (.lnk 포함) */
-private void launchByPath(String path) {
-    try {
-        String lower = path.toLowerCase();
-        if (lower.endsWith(".lnk")) {
-            // .lnk 는 ProcessBuilder 로 직접 실행 불가 → cmd /c start 로 위임
-            new ProcessBuilder("cmd", "/c", "start", "", path).start();
-        } else {
-            new ProcessBuilder(path).start();
-        }
-    } catch (Exception ex) {
-        JOptionPane.showMessageDialog(this, "실행 실패: " + ex.getMessage(),
-            "업무도구", JOptionPane.ERROR_MESSAGE);
-    }
-}
+	/** 절대 경로로 실행 (.lnk 포함) */
+	private void launchByPath(String path) {
+		try {
+			String lower = path.toLowerCase();
+			if (lower.endsWith(".lnk")) {
+				// .lnk 는 ProcessBuilder 로 직접 실행 불가 → cmd /c start 로 위임
+				new ProcessBuilder("cmd", "/c", "start", "", path).start();
+				} else {
+				new ProcessBuilder(path).start();
+			}
+			} catch (Exception ex) {
+			JOptionPane.showMessageDialog(this, "실행 실패: " + ex.getMessage(),
+			"업무도구", JOptionPane.ERROR_MESSAGE);
+		}
+	}
     /**
-     * 슬롯 등록/수정 다이얼로그.
-     * 저장 후 rebuildMenuBar() 로 메뉴 전체를 즉시 갱신한다.
-     */
+		* 슬롯 등록/수정 다이얼로그.
+		* 저장 후 rebuildMenuBar() 로 메뉴 전체를 즉시 갱신한다.
+	*/
     private void openSlotEditor(int idx) {
         if (clockHost == null) { showNotReady(); return; }
-
+		
         String curName = clockHost.getConfig(slotNameKey(idx), "");
         String curPath = clockHost.getConfig(slotPathKey(idx), "");
-
+		
         JTextField nameField = new JTextField(curName, 26);
         JTextField pathField = new JTextField(curPath, 34);
         pathField.setEditable(true); // 직접 입력·붙여넣기 허용
-
+		
         JButton browseBtn = new JButton("찾아보기...");
         browseBtn.addActionListener(e -> {
             String cur = pathField.getText().trim();
             String startDir = cur.isEmpty()
-                ? System.getProperty("user.home")
-                : new java.io.File(cur).getParent();
+			? System.getProperty("user.home")
+			: new java.io.File(cur).getParent();
             JFileChooser fc = new JFileChooser(startDir);
             fc.setDialogTitle("실행 파일 선택");
             fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
-                "실행 가능 파일 (*.exe, *.bat, *.cmd, *.lnk)", "exe", "bat", "cmd", "lnk"));
+			"실행 가능 파일 (*.exe, *.bat, *.cmd, *.lnk)", "exe", "bat", "cmd", "lnk"));
             fc.setAcceptAllFileFilterUsed(true);
             if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 java.io.File sel = fc.getSelectedFile();
@@ -702,10 +944,10 @@ private void launchByPath(String path) {
                     int dot = fn.lastIndexOf('.');
                     if (dot > 0) fn = fn.substring(0, dot);
                     nameField.setText(fn);
-                }
-            }
-        });
-
+				}
+			}
+		});
+		
         JPanel row1 = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
         row1.add(new JLabel("이름 : ")); row1.add(nameField);
         JPanel row2 = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
@@ -716,40 +958,40 @@ private void launchByPath(String path) {
         panel.add(row1);
         panel.add(javax.swing.Box.createVerticalStrut(6));
         panel.add(row2);
-
+		
         int result = JOptionPane.showConfirmDialog(this, panel,
             "업무도구 슬롯 " + (idx + 1) + " 등록",
-            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+		JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result != JOptionPane.OK_OPTION) return;
-
+		
         String newName = nameField.getText().trim();
         String newPath = pathField.getText().trim();
         if (newName.isEmpty() || newPath.isEmpty()) {
             JOptionPane.showMessageDialog(this, "이름과 경로를 모두 입력하세요.",
-                "업무도구", JOptionPane.WARNING_MESSAGE);
+			"업무도구", JOptionPane.WARNING_MESSAGE);
             return;
-        }
+		}
         clockHost.setMultipleConfigAndSave(
             slotNameKey(idx), newName,
             slotPathKey(idx), newPath
-        );
+		);
         rebuildMenuBar();
-    }
-
+	}
+	
     /** 슬롯 삭제 확인 후 저장, 메뉴 재빌드 */
     private void deleteSlot(int idx, String displayName) {
         if (clockHost == null) { showNotReady(); return; }
         int ok = JOptionPane.showConfirmDialog(this,
             "「" + displayName + "」 을 삭제하시겠습니까?",
-            "업무도구 삭제", JOptionPane.YES_NO_OPTION);
+		"업무도구 삭제", JOptionPane.YES_NO_OPTION);
         if (ok != JOptionPane.YES_OPTION) return;
         clockHost.setMultipleConfigAndSave(
             slotNameKey(idx), "",
             slotPathKey(idx), ""
-        );
+		);
         rebuildMenuBar();
-    }
-
+	}
+	
     /** 두 슬롯의 이름·경로를 교환하고 메뉴를 즉시 재빌드한다 */
     private void swapSlots(int srcIdx, int dstIdx) {
         if (clockHost == null) { showNotReady(); return; }
@@ -762,31 +1004,31 @@ private void launchByPath(String path) {
             slotPathKey(srcIdx), dstPath,
             slotNameKey(dstIdx), srcName,
             slotPathKey(dstIdx), srcPath
-        );
+		);
         rebuildMenuBar();
-    }
-
+	}
+	
     /** 메뉴바 전체를 EDT 에서 재빌드·적용한다 */
     private void rebuildMenuBar() {
         SwingUtilities.invokeLater(() -> {
             setJMenuBar(buildMenuBar());
             revalidate();
             repaint();
-        });
-    }
-
+		});
+	}
+	
     /**
-     * 재빌드 후 업무도구 메뉴의 특정 슬롯 서브메뉴를 프로그래밍으로 열어
-     * 이동 후에도 메뉴가 닫히지 않고 해당 슬롯이 열린 채로 유지되게 한다.
-     */
+		* 재빌드 후 업무도구 메뉴의 특정 슬롯 서브메뉴를 프로그래밍으로 열어
+		* 이동 후에도 메뉴가 닫히지 않고 해당 슬롯이 열린 채로 유지되게 한다.
+	*/
     private void openSlotSubmenu(int slotIdx) {
         JMenuBar bar = getJMenuBar();
         for (int m = 0; m < bar.getMenuCount(); m++) {
             JMenu menu = bar.getMenu(m);
             if (menu == null || !"업무도구".equals(menu.getText())) continue;
-
+			
             menu.doClick(); // 업무도구 메뉴 열기
-
+			
             // 고정 항목(Excel/Word/PPT)은 JMenuItem, 슬롯은 JMenu — JMenu 만 카운트
             int slotCount = 0;
             for (int c = 0; c < menu.getMenuComponentCount(); c++) {
@@ -795,19 +1037,38 @@ private void launchByPath(String path) {
                     if (slotCount == slotIdx) {
                         slotMenu.doClick(); // 해당 슬롯 서브메뉴 열기
                         return;
-                    }
+					}
                     slotCount++;
-                }
-            }
-        }
-    }
-
+				}
+			}
+		}
+	}
+	
     // ═══════════════════════════════════════════════════════════
     //  [Help] 메뉴
     // ═══════════════════════════════════════════════════════════
-
+	
     private JMenu buildHelpMenu() {
         JMenu helpMenu = makeMenu("Help");
+		
+        // ── 프로그램 업그레이드 ───────────────────────────────────
+        JMenuItem upgradeItem = makeMenuItem("🔄 프로그램 업그레이드", "GitHub 에서 최신 버전을 내려받아 덮어씁니다");
+        upgradeItem.addActionListener(e -> doUpgrade());
+        helpMenu.add(upgradeItem);
+		
+        helpMenu.addSeparator();
+		
+        // ── Log 조회 ──────────────────────────────────────────────
+        JMenuItem logViewItem = makeMenuItem("📋 Log조회", "현재 로그 파일을 표시합니다");
+        logViewItem.addActionListener(e -> doShowLogFile());
+        helpMenu.add(logViewItem);
+		
+        // ── 지난 Log 데이타 삭제 ─────────────────────────────────
+        JMenuItem logDeleteItem = makeMenuItem("🗑 지난Log데이타 삭제", "이전 날짜 로그 파일을 삭제합니다");
+        logDeleteItem.addActionListener(e -> doDeleteOldLogs());
+        helpMenu.add(logDeleteItem);
+		
+        helpMenu.addSeparator();
 		
         // ── 기본 설정 파일 ────────────────────────────────────────
         JMenuItem iniItem = makeMenuItem("⚙️ 기본 설정 파일", "설정 파일(ini)을 표시합니다");
@@ -819,61 +1080,61 @@ private void launchByPath(String path) {
         // ── 프로그램 개발자 ─────────────────────────────────────────────────
         JMenuItem prorgammer = makeMenuItem("개발자 소개", "김갑수 / 대한민국 서울");
         prorgammer.addActionListener(e -> 
-		{
-			try {
+			{
+				try {
                     java.awt.Desktop.getDesktop().browse(new java.net.URI("https://github.com/GarpsuKim"));
 					} catch (Exception ex) {
                     JOptionPane.showMessageDialog(SplashWindow.this,
 					"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 				}
-			
-		}
-	);
+				
+			}
+		);
         helpMenu.add(prorgammer);
 		
 		// ── 프로그램 다운로드 ─────────────────────────────────────────────────
         JMenuItem pgmDownload = makeMenuItem("설치 파일", "끝판왕 (이 프로그램) 설치파일 다운로드");
         pgmDownload.addActionListener(e -> 
-		{
-			try {
+			{
+				try {
                     java.awt.Desktop.getDesktop().browse(new java.net.URI("https://github.com/GarpsuKim/KootPanKing/releases/tag/KootPanKing"));
 					} catch (Exception ex) {
                     JOptionPane.showMessageDialog(SplashWindow.this,
 					"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 				}
-			
-		}
-	);
+				
+			}
+		);
         helpMenu.add(pgmDownload);
 		
 		// ── 프로그램 소스 ─────────────────────────────────────────────────
         JMenuItem pgmSource = makeMenuItem("프로그램 소스", "Java 프로그램 소스");
         pgmSource.addActionListener(e -> 
-		{
-			try {
+			{
+				try {
                     java.awt.Desktop.getDesktop().browse(new java.net.URI("https://github.com/GarpsuKim/KootPanKing"));
 					} catch (Exception ex) {
                     JOptionPane.showMessageDialog(SplashWindow.this,
 					"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 				}
-			
-		}
-	);
+				
+			}
+		);
         helpMenu.add(pgmSource);
 		
 		// ── 자바 ─────────────────────────────────────────────────
         JMenuItem javaInstaller = makeMenuItem("Java/JVM ", "Java 환경 설치파일 다운로드");
         javaInstaller.addActionListener(e -> 
-		{
-			try {
+			{
+				try {
                     java.awt.Desktop.getDesktop().browse(new java.net.URI("https://www.oracle.com/java"));
 					} catch (Exception ex) {
                     JOptionPane.showMessageDialog(SplashWindow.this,
 					"브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
 				}
-			
-		}
-	);
+				
+			}
+		);
         helpMenu.add(javaInstaller);
         // ── About ─────────────────────────────────────────────────
         JMenuItem aboutItem = makeMenuItem("About", "프로그램 정보");
@@ -883,7 +1144,7 @@ private void launchByPath(String path) {
 		
         return helpMenu;
 	}
-
+	
     // ═══════════════════════════════════════════════════════════
     //  메뉴 액션 구현
     // ═══════════════════════════════════════════════════════════
@@ -922,6 +1183,394 @@ private void launchByPath(String path) {
                 openTextFileWindow(file);
 			});
 		}, "FileChooserInit").start();
+	}
+	
+    // ═══════════════════════════════════════════════════════════
+    //  Help → 프로그램 업그레이드
+    // ═══════════════════════════════════════════════════════════
+	
+    private static final String UPGRADE_ZIP_URL =
+	"https://github.com/GarpsuKim/KootPanKing/releases/download/KootPanKing/KootPanKing.zip";
+	
+    /**
+		* GitHub 에서 KootPanKing.zip 을 내려받아,
+		* 기존 설치 폴더(A) 구조를 먼저 파악한 뒤
+		* ZIP 내부 구조와 무관하게 A 와 동일한 구조로 임시 폴더(B) 에 재배치한다.
+		* 이후 bat 을 생성·실행하고 현재 프로세스를 종료한다.
+		*
+		* ── 흐름 ──────────────────────────────────────────────────────
+		*  [Java]
+		*    ① installDir(A) 탐색  (.exe 위치 기준)
+		*    ② ZIP 다운로드
+		*    ③ ZIP 내부 구조 스캔 → 최상위 폴더명 확인
+		*    ④ A 의 폴더 구조 스캔 → 파일명 → 상대경로 맵 생성
+		*    ⑤ ZIP 를 풀면서 각 파일을 A 맵 기준 상대경로로 B 에 재배치
+		*       (A 에 없는 신규 파일은 ZIP 원래 경로 그대로 B 에 배치)
+		*    ⑥ updater.bat 생성 → cmd /c 실행 → System.exit
+		*
+		*  [bat]
+		*    ping 대기 → robocopy B A /E /IS /IT → rmdir B → start exe → del 자신
+		*
+		* 실행 중인 .exe 를 Java 쪽에서 직접 덮어쓰면 Windows 파일 잠금으로
+		* Access Denied 가 발생하므로 bat 으로 회피한다.
+	*/
+    private void doUpgrade() {
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "GitHub 에서 최신 버전을 내려받아 업그레이드합니다.\n\n"
+            + "다운로드 완료 후 프로그램이 자동으로 종료되고\n"
+            + "업데이터가 파일을 교체한 뒤 재시작합니다.\n\n"
+            + "계속하시겠습니까?",
+		"프로그램 업그레이드", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (confirm != JOptionPane.YES_OPTION) return;
+		
+        new Thread(() -> {
+			
+            // ── ① 설치 폴더(A) 탐색 ─────────────────────────────
+            // AppLogger 는 .jar 경로를 반환할 수 있으므로
+            // .exe 를 찾을 때까지 최대 2단계 위로 올라가며 탐색
+            String exePathStr = AppLogger.getExeFilePath();
+            java.io.File exeFile = new java.io.File(exePathStr).getAbsoluteFile();
+			
+            java.io.File installDir = exeFile.getParentFile() != null
+			? exeFile.getParentFile() : new java.io.File(".");
+            String exeFileName = null;
+			
+            for (int up = 0; up <= 2 && exeFileName == null; up++) {
+                java.io.File dir = installDir;
+                for (int i = 0; i < up; i++)
+				if (dir.getParentFile() != null) dir = dir.getParentFile();
+                java.io.File[] found = dir.listFiles(
+				f -> f.isFile() && f.getName().toLowerCase().endsWith(".exe"));
+                if (found != null && found.length > 0) {
+                    java.io.File picked = found[0];
+                    for (java.io.File f : found)
+					if (f.getName().toLowerCase().contains("kootpanking")) { picked = f; break; }
+                    exeFileName = picked.getName();
+                    installDir  = dir;
+				}
+			}
+            if (exeFileName == null) exeFileName = exeFile.getName();
+			
+            final java.io.File finalInstallDir = installDir;
+            final String       finalExeName    = exeFileName;
+            log("📁 설치 폴더 (A): " + finalInstallDir.getAbsolutePath());
+            log("▶  재시작 대상  : " + finalExeName);
+			
+            // ── ② 임시 폴더 준비 ────────────────────────────────
+            java.io.File tmpDir = new java.io.File(
+			System.getProperty("java.io.tmpdir"), "KootPanKing_upg");
+            if (tmpDir.exists()) deleteDir(tmpDir);
+            tmpDir.mkdirs();
+            final java.io.File finalTmpDir = tmpDir;
+            log("📁 임시 폴더    : " + finalTmpDir.getAbsolutePath());
+			
+            // ── ③ ZIP 다운로드 ───────────────────────────────────
+            java.io.File tmpZip = new java.io.File(tmpDir, "update.zip");
+            log("⬇️  다운로드 시작: " + UPGRADE_ZIP_URL);
+            try {
+                java.net.HttpURLConnection con =
+				(java.net.HttpURLConnection) new java.net.URI(UPGRADE_ZIP_URL)
+				.toURL().openConnection();
+                con.setConnectTimeout(15000);
+                con.setReadTimeout(120000);
+                con.setInstanceFollowRedirects(true);
+                con.connect();
+                int code = con.getResponseCode();
+                if (code != 200) {
+                    con.disconnect();
+                    swingLog("❌ 다운로드 실패 (HTTP " + code + ")"); return;
+				}
+                long total = con.getContentLengthLong();
+                try (java.io.InputStream in = con.getInputStream();
+					java.io.FileOutputStream fos = new java.io.FileOutputStream(tmpZip)) {
+                    byte[] buf = new byte[32768]; long done = 0; int n;
+                    while ((n = in.read(buf)) != -1) {
+                        fos.write(buf, 0, n); done += n;
+                        if (total > 0) {
+                            final long d = done, t = total;
+                            SwingUtilities.invokeLater(() ->
+                                setStatus(String.format("다운로드 중... %d KB / %d KB",
+								d / 1024, t / 1024)));
+						}
+					}
+				}
+                con.disconnect();
+                log(String.format("✅ 다운로드 완료 (%.1f KB)", tmpZip.length() / 1024.0));
+				} catch (Exception ex) {
+                swingLog("❌ 다운로드 오류: " + ex.getMessage()); return;
+			}
+			
+            // ── ④ ZIP 내부 구조 스캔 → 최상위 폴더명 확인 ─────
+            // ZIP 가 "KootPanKing/..." 처럼 최상위 폴더를 가지는 경우 제거할 prefix 를 구한다.
+            // 모든 엔트리의 공통 최상위 폴더명을 찾아 prefix 로 사용한다.
+            // (최상위 폴더가 없거나 엔트리마다 다르면 prefix = "")
+            log("🔍 ZIP 구조 분석 중...");
+            String zipPrefix = "";
+            try (java.util.zip.ZipInputStream zis =
+				new java.util.zip.ZipInputStream(
+					new java.io.BufferedInputStream(
+					new java.io.FileInputStream(tmpZip)))) {
+					java.util.zip.ZipEntry entry;
+					String commonTop = null;   // 공통 최상위 폴더명
+					boolean consistent = true; // 모든 엔트리가 같은 최상위 폴더인지
+					while ((entry = zis.getNextEntry()) != null) {
+						String name = entry.getName().replace('\\', '/');
+						int slash = name.indexOf('/');
+						String top = (slash >= 0) ? name.substring(0, slash) : "";
+						if (top.isEmpty()) { consistent = false; zis.closeEntry(); break; }
+						if (commonTop == null) commonTop = top;
+						else if (!commonTop.equals(top)) { consistent = false; zis.closeEntry(); break; }
+						zis.closeEntry();
+					}
+					if (consistent && commonTop != null) {
+						zipPrefix = commonTop + "/";
+						log("   ZIP 최상위 폴더: [" + commonTop + "] → 경로에서 제거");
+						} else {
+						log("   ZIP 최상위 폴더 없음 → 경로 그대로 사용");
+					}
+					} catch (Exception ex) {
+					swingLog("❌ ZIP 구조 분석 오류: " + ex.getMessage()); return;
+			}
+            final String finalZipPrefix = zipPrefix;
+			
+            // ── ⑤ 기존 설치 폴더(A) 의 파일명 → 상대경로 맵 생성 ─
+            // 파일명(소문자) → A 기준 상대경로  (예: "kootpanking.jar" → "app/KootPanKing.jar")
+            // 같은 이름이 여러 경로에 있을 수 있으므로 List 로 관리
+            log("🗂️  설치 폴더 구조 스캔 중...");
+            java.util.Map<String, java.util.List<String>> installMap = new java.util.HashMap<>();
+            buildInstallMap(finalInstallDir, finalInstallDir, installMap);
+            log("   스캔 완료: " + installMap.size() + " 종류의 파일명 인식");
+			
+            // ── ⑥ ZIP 를 풀면서 A 구조에 맞게 B(extractDir) 에 재배치 ─
+            log("📦 압축 해제 & 구조 재배치 중...");
+            java.io.File extractDir = new java.io.File(tmpDir, "extracted");
+            extractDir.mkdirs();
+            int placed = 0, newFile = 0;
+            try (java.util.zip.ZipInputStream zis =
+				new java.util.zip.ZipInputStream(
+					new java.io.BufferedInputStream(
+					new java.io.FileInputStream(tmpZip)))) {
+					java.util.zip.ZipEntry entry;
+					while ((entry = zis.getNextEntry()) != null) {
+						// 최상위 폴더 prefix 제거
+						String name = entry.getName().replace('\\', '/');
+						if (!finalZipPrefix.isEmpty() && name.startsWith(finalZipPrefix))
+                        name = name.substring(finalZipPrefix.length());
+						if (name.isEmpty()) { zis.closeEntry(); continue; }
+						
+						if (entry.isDirectory()) {
+							zis.closeEntry(); continue; // 폴더는 파일 복사 시 자동 생성
+						}
+						
+						// 파일명(소문자) 로 A 의 상대경로 조회
+						String fileName = name.contains("/")
+                        ? name.substring(name.lastIndexOf('/') + 1) : name;
+						String targetRelPath = resolveTargetPath(
+						fileName.toLowerCase(), name, installMap);
+						
+						java.io.File dest = new java.io.File(extractDir, targetRelPath);
+						java.io.File par  = dest.getParentFile();
+						if (par != null) par.mkdirs();
+						
+						try (java.io.FileOutputStream fos = new java.io.FileOutputStream(dest)) {
+							byte[] buf = new byte[32768]; int n;
+							while ((n = zis.read(buf)) != -1) fos.write(buf, 0, n);
+						}
+						
+						// 신규 파일(A 에 없던 것) 여부 로그
+						if (targetRelPath.equals(name)) newFile++;
+						else placed++;
+						
+						zis.closeEntry();
+					}
+					} catch (Exception ex) {
+					swingLog("❌ 압축 해제 오류: " + ex.getMessage()); return;
+			}
+            tmpZip.delete();
+            log(String.format("✅ 재배치 완료 — 기존 경로 매핑: %d개, 신규 파일: %d개",
+			placed, newFile));
+            log("   B 폴더: " + extractDir.getAbsolutePath());
+			
+            // ── ⑦ updater.bat 생성 ──────────────────────────────
+            // ★ bat 을 tmpDir 바깥(TEMP 루트)에 저장 → rmdir 시 자신이 삭제되는 문제 방지
+            // ★ MS949 인코딩 → cmd.exe 가 경로의 한글을 올바르게 읽음
+            // ★ robocopy 사용: /E(하위폴더 포함) /IS(동일파일도 복사) /IT(타임스탬프 포함)
+            //   xcopy 와 달리 robocopy 는 Windows 기본 내장이며 경로 길이 제한이 없음
+            java.io.File batFile = new java.io.File(
+			System.getProperty("java.io.tmpdir"), "kpk_updater.bat");
+            // bat 실행 로그 파일 — tmpDir 바깥(TEMP 루트)에 저장, 자동 삭제 안 함
+            java.io.File batLog = new java.io.File(
+			System.getProperty("java.io.tmpdir"), "kpk_updater_log.txt");
+            String installAbs = finalInstallDir.getAbsolutePath();
+            String extractAbs = extractDir.getAbsolutePath();
+            String tmpAbs     = finalTmpDir.getAbsolutePath();
+            String logAbs     = batLog.getAbsolutePath();
+            String batContent =
+			"@echo off\r\n"
+			+ "setlocal\r\n"
+			// 로그 파일 초기화
+			+ "echo [kpk_updater] start > \"" + logAbs + "\"\r\n"
+			// [BUG2 FIX] 경로에 공백 포함 대비 따옴표 추가
+			+ "echo [kpk_updater] installDir : \"" + installAbs + "\" >> \"" + logAbs + "\"\r\n"
+			+ "echo [kpk_updater] extractDir : \"" + extractAbs + "\" >> \"" + logAbs + "\"\r\n"
+			// ── ① Java 프로세스 종료 대기
+			+ "echo [kpk_updater] waiting for Java process exit... >> \"" + logAbs + "\"\r\n"
+			+ "ping 127.0.0.1 -n 4 >nul\r\n"
+			+ "echo [kpk_updater] wait done >> \"" + logAbs + "\"\r\n"
+			// ── ② extractDir 존재 확인
+			+ "if not exist \"" + extractAbs + "\" (\r\n"
+			+ "  echo [kpk_updater] ERROR: extractDir not found >> \"" + logAbs + "\"\r\n"
+			+ "  goto :error\r\n"
+			+ ")\r\n"
+			+ "echo [kpk_updater] extractDir exists OK >> \"" + logAbs + "\"\r\n"
+			// ── ③ B → A 덮어쓰기 (robocopy: 종료코드 0~7 은 정상)
+			+ "echo [kpk_updater] robocopy start >> \"" + logAbs + "\"\r\n"
+			+ "robocopy \"" + extractAbs + "\" \"" + installAbs
+			+ "\" /E /IS /IT /NJH /NJS >> \"" + logAbs + "\" 2>&1\r\n"
+			+ "set RC=%errorlevel%\r\n"
+			+ "echo [kpk_updater] robocopy exit code: %RC% >> \"" + logAbs + "\"\r\n"
+			+ "if %RC% GTR 7 (\r\n"
+			+ "  echo [kpk_updater] ERROR: robocopy failed >> \"" + logAbs + "\"\r\n"
+			+ "  goto :error\r\n"
+			+ ")\r\n"
+			+ "echo [kpk_updater] robocopy OK >> \"" + logAbs + "\"\r\n"
+			// ── ④ 재시작 (절대경로로 실행)
+			+ "echo [kpk_updater] starting exe: \"" + installAbs + "\\" + finalExeName + "\" >> \"" + logAbs + "\"\r\n"
+			+ "if not exist \"" + installAbs + "\\" + finalExeName + "\" (\r\n"
+			+ "  echo [kpk_updater] ERROR: exe not found >> \"" + logAbs + "\"\r\n"
+			+ "  goto :error\r\n"
+			+ ")\r\n"
+			// cd 로 작업 디렉터리 이동 후 exe 직접 실행 (start /D 파싱 문제 회피)
+			+ "cd /d \"" + installAbs + "\"\r\n"
+			+ "echo [kpk_updater] cd done >> \"" + logAbs + "\"\r\n"
+			// [BUG3 FIX] start 타이틀을 빈문자열("")에서 명시적 문자열로 변경 → 환경 블록 오류 방지
+			+ "start \"KPK_Updater\" \"" + installAbs + "\\" + finalExeName + "\"\r\n"
+			+ "echo [kpk_updater] start issued >> \"" + logAbs + "\"\r\n"
+			// exe 가 JVM 초기화를 마칠 때까지 충분히 대기
+			+ "ping 127.0.0.1 -n 6 >nul\r\n"
+			+ "echo [kpk_updater] wait after start done >> \"" + logAbs + "\"\r\n"
+			+ "goto :cleanup\r\n"
+			// ── ⑤ 오류 처리
+			+ ":error\r\n"
+			+ "echo [kpk_updater] === UPGRADE FAILED === >> \"" + logAbs + "\"\r\n"
+			+ "echo.\r\n"
+			+ "echo *** 업그레이드 실패 ***\r\n"
+			+ "echo 로그 파일: " + logAbs + "\r\n"
+			+ "echo.\r\n"
+			+ "pause\r\n"
+			// [BUG1 FIX] :error 에서 :cleanup 으로 명시적 goto 추가 (fall-through 방지)
+			+ "goto :cleanup\r\n"
+			// ── ⑥ 임시 폴더 정리
+			+ ":cleanup\r\n"
+			+ "echo [kpk_updater] cleanup start >> \"" + logAbs + "\"\r\n"
+			+ "rmdir /S /Q \"" + tmpAbs + "\"\r\n"
+			+ "echo [kpk_updater] done >> \"" + logAbs + "\"\r\n"
+			// bat 자기 자신 삭제
+			+ "(goto) 2>nul & del \"%~f0\"\r\n";
+            try (java.io.PrintWriter pw = new java.io.PrintWriter(
+				new java.io.OutputStreamWriter(
+				new java.io.FileOutputStream(batFile), "MS949"))) {
+                pw.print(batContent);
+				} catch (Exception ex) {
+                swingLog("❌ updater.bat 생성 실패: " + ex.getMessage()); return;
+			}
+            log("✅ updater.bat 생성 완료 → " + batFile.getAbsolutePath());
+            log("📋 bat 실행 로그  → " + batLog.getAbsolutePath());
+            log("   (업그레이드 후 위 파일에서 성공/실패 내용 확인 가능)");
+			
+            // ── ⑧ bat 독립 실행 후 Java 종료 ──────────────────────────────
+            SwingUtilities.invokeLater(() -> {
+                log("🚀 업데이터 실행 — 프로그램을 종료합니다...");
+                setStatus("업그레이드 중... 재시작 대기");
+            });
+            try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+
+            try {
+                // [BUG3 FIX] "start", "" → "start", "KPK_Updater" 로 변경
+                // 빈 타이틀 "" 을 별도 인수로 넘기면 일부 Windows 에서
+                // "메모리 리소스가 부족하여 이 명령을 처리할 수 없습니다" 오류 발생
+                String batPath = batFile.getAbsolutePath();
+                new ProcessBuilder("cmd", "/c", "start", "KPK_Updater", batPath).start();
+            } catch (Exception ex) {
+                swingLog("❌ updater.bat 실행 실패: " + ex.getMessage()); return;
+            }
+
+            // bat 기동 여유 후 Java 종료
+            try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+            SwingUtilities.invokeLater(() -> {
+                if (clockHost != null) clockHost.exitAll();
+                else System.exit(0);
+            });
+			
+		}, "UpgradeThread").start();
+	}
+	
+    /**
+		* 설치 폴더(A) 를 재귀 스캔하여
+		* 파일명(소문자) → List<상대경로(슬래시 구분)> 맵을 만든다.
+		*
+		* 예)  "kootpanking.jar" → ["app/KootPanKing.jar"]
+		*      "jvm.dll"         → ["runtime/bin/server/jvm.dll", ...]
+	*/
+    private static void buildInstallMap(java.io.File base, java.io.File cur,
+		java.util.Map<String, java.util.List<String>> map) {
+        java.io.File[] entries = cur.listFiles();
+        if (entries == null) return;
+        for (java.io.File f : entries) {
+            if (f.isDirectory()) {
+                buildInstallMap(base, f, map);
+				} else {
+                // base 기준 상대경로를 슬래시로 정규화
+                String rel = base.toURI().relativize(f.toURI()).getPath();
+                String key = f.getName().toLowerCase();
+                map.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(rel);
+			}
+		}
+	}
+	
+    /**
+		* ZIP 에서 꺼낸 파일을 B 의 어느 상대경로에 놓을지 결정한다.
+		*
+		* ① installMap 에 파일명(소문자)이 1건만 있으면 → 그 경로 사용
+		* ② 2건 이상이면 → ZIP 상대경로의 상위 디렉터리명이 installMap 경로와
+		*    가장 많이 겹치는 것을 선택
+		* ③ installMap 에 없으면(신규 파일) → ZIP 원래 경로 그대로 사용
+	*/
+    private static String resolveTargetPath(String fileNameLower, String zipRelPath,
+		java.util.Map<String, java.util.List<String>> installMap) {
+        java.util.List<String> candidates = installMap.get(fileNameLower);
+        if (candidates == null || candidates.isEmpty()) return zipRelPath; // 신규 파일
+		
+        if (candidates.size() == 1) return candidates.get(0); // 유일한 매핑
+		
+        // 2건 이상: ZIP 경로 세그먼트와 가장 많이 일치하는 후보 선택
+        String[] zipParts = zipRelPath.toLowerCase().split("/");
+        String best = candidates.get(0);
+        int bestScore = -1;
+        for (String candidate : candidates) {
+            String[] cParts = candidate.toLowerCase().split("/");
+            int score = 0;
+            for (String zp : zipParts)
+			for (String cp : cParts)
+			if (zp.equals(cp)) score++;
+            if (score > bestScore) { bestScore = score; best = candidate; }
+		}
+        return best;
+	}
+	
+    /** 디렉터리 재귀 삭제 (updater 임시 폴더 초기화용) */
+    private static void deleteDir(java.io.File dir) {
+        if (dir == null || !dir.exists()) return;
+        java.io.File[] files = dir.listFiles();
+        if (files != null) for (java.io.File f : files) {
+            if (f.isDirectory()) deleteDir(f); else f.delete();
+		}
+        dir.delete();
+	}
+	
+    /** 백그라운드 스레드에서 EDT 로그 출력 (짧은 람다 대용) */
+    private void swingLog(String msg) {
+        SwingUtilities.invokeLater(() -> log(msg));
 	}
 	
     /** File → Close / X버튼 : 창 숨기기 + ini mainWindow 값 제거 */
@@ -982,6 +1631,72 @@ private void launchByPath(String path) {
             AppLogger.close();
             System.exit(0);
 		}
+	}
+	
+    /** Help → Log조회 */
+    private void doShowLogFile() {
+        if (clockHost == null) { showNotReady(); return; }
+        String logPath = clockHost.getLogFilePath();
+        if (logPath == null || logPath.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "로그 파일 경로를 찾을 수 없습니다.", "Log조회", JOptionPane.WARNING_MESSAGE);
+            return;
+		}
+        java.io.File logFile = new java.io.File(logPath);
+        if (!logFile.exists()) {
+            JOptionPane.showMessageDialog(this, "로그 파일이 존재하지 않습니다.\n" + logPath, "Log조회", JOptionPane.WARNING_MESSAGE);
+            return;
+		}
+        try {
+            String logText;
+            try (java.io.BufferedReader br = new java.io.BufferedReader(
+			new java.io.InputStreamReader(new java.io.FileInputStream(logFile), "UTF-8"))) {
+			StringBuilder sb = new StringBuilder(); String line;
+			while ((line = br.readLine()) != null) sb.append(line).append("\n");
+			logText = sb.toString();
+            }
+            String escaped = logText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+            java.io.File htmlFile = java.io.File.createTempFile("applog_", ".html");
+            htmlFile.deleteOnExit();
+            try (java.io.PrintWriter pw = new java.io.PrintWriter(
+			new java.io.OutputStreamWriter(new java.io.FileOutputStream(htmlFile), "UTF-8"))) {
+			pw.println("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>끝판왕 로그</title><style>");
+			pw.println("body{font-family:'Consolas','Malgun Gothic',monospace;background:#0d0d0d;color:#c8ffc8;padding:20px;line-height:1.6;}");
+			pw.println("pre{white-space:pre-wrap;font-size:13px;}</style></head><body><pre>");
+			pw.println(escaped); pw.println("</pre></body></html>");
+            }
+            java.awt.Desktop.getDesktop().browse(htmlFile.toURI());
+			} catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "로그 파일 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+	
+    /** Help → 지난Log데이타 삭제 */
+    private void doDeleteOldLogs() {
+        if (clockHost == null) { showNotReady(); return; }
+        String logPath = clockHost.getLogFilePath();
+        if (logPath == null || logPath.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "로그 파일 경로를 찾을 수 없습니다.", "Log삭제", JOptionPane.WARNING_MESSAGE);
+            return;
+		}
+        java.io.File logDir = new java.io.File(logPath).getParentFile();
+        if (logDir == null || !logDir.exists()) {
+            JOptionPane.showMessageDialog(this, "로그 폴더를 찾을 수 없습니다.", "Log삭제", JOptionPane.WARNING_MESSAGE);
+            return;
+		}
+        java.io.File currentLog = new java.io.File(logPath);
+        java.io.File[] oldFiles = logDir.listFiles(f ->
+		f.isFile() && f.getName().endsWith(".txt") && !f.getAbsolutePath().equals(currentLog.getAbsolutePath()));
+        if (oldFiles == null || oldFiles.length == 0) {
+            JOptionPane.showMessageDialog(this, "삭제할 지난 로그 파일이 없습니다.", "Log삭제", JOptionPane.INFORMATION_MESSAGE);
+            return;
+		}
+        int ans = JOptionPane.showConfirmDialog(this,
+            "지난 로그 파일 " + oldFiles.length + "개를 삭제하시겠습니까?\n폴더: " + logDir.getAbsolutePath(),
+		"지난Log데이타 삭제", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (ans != JOptionPane.YES_OPTION) return;
+        int deleted = 0;
+        for (java.io.File f : oldFiles) { if (f.delete()) deleted++; }
+        JOptionPane.showMessageDialog(this, deleted + "개 삭제 완료.", "Log삭제", JOptionPane.INFORMATION_MESSAGE);
 	}
 	
     /** Help → 기본 설정 파일 */
@@ -1122,7 +1837,7 @@ private void launchByPath(String path) {
 		
 		sub.setVisible(true);
 	}
-
+	
     // ═══════════════════════════════════════════════════════════
     //  로그 출력 내부 구현
     // ═══════════════════════════════════════════════════════════
@@ -1152,18 +1867,18 @@ private void launchByPath(String path) {
 			
 		} catch (BadLocationException ignored) {}
 	}
-
+	
     // ═══════════════════════════════════════════════════════════
     //  유틸
     // ═══════════════════════════════════════════════════════════
-
+	
     /** 시계 미초기화 안내 */
     private void showNotReady() {
         JOptionPane.showMessageDialog(this,
             "시계가 아직 초기화되지 않았습니다.\n잠시 후 다시 시도하세요.",
 		"알림", JOptionPane.INFORMATION_MESSAGE);
 	}
-
+	
     /* 파일을 UTF-8 → UTF-16 BE → EUC-KR 순으로 자동 인코딩 탐지하여 읽기
 	*  반환: [0] = 인코딩 레이블,  [1] = 파일 내용 */
 	private String[] readFileAutoEncoding(File file) throws IOException {	
@@ -1237,7 +1952,7 @@ private void launchByPath(String path) {
         m.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
         m.getPopupMenu().setBackground(new Color(210, 235, 250));
         return m;
-    }
+	}
     private JMenuItem makeMenuItem(String text, String tooltip) {
         JMenuItem item = new JMenuItem(text);
         item.setForeground(new Color( 20,  50,  90));
@@ -1245,14 +1960,14 @@ private void launchByPath(String path) {
         item.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
         if (tooltip != null && !tooltip.isEmpty()) item.setToolTipText(tooltip);
         return item;
-    }
+	}
     /** 외부에서 받은 JMenu 에 스타일 + 텍스트 덮어쓰기 */
     private void styleMenu(JMenu m, String newText) {
         m.setText(newText);
         m.setForeground(new Color( 20,  50,  90));
         m.setFont(new Font("Malgun Gothic", Font.PLAIN, 13));
         m.getPopupMenu().setBackground(new Color(210, 235, 250));
-    }
+	}
 }   //  public class SplashWindow 
 
 // ═══════════════════════════════════════════════════════════
