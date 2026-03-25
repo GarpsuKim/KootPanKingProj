@@ -15,7 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class KootPanKing extends JFrame {
-    private static final String thisProgramName = "[KootPanKing 끝판왕 (v1.00)]";
+    private static final String thisProgramName = "[KootPanKing 끝판왕 (v1.0f)]";
     // ── Alarm ---────────────
     // AlarmEntry/알람 로직+UI 는 AlarmController.java 로 분리됨
     AlarmController alarmController;

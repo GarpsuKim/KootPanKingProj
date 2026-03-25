@@ -18,7 +18,7 @@ echo   KootPanKing 다운로드 및 실행
 echo ============================================
 
 set "URL=https://github.com/GarpsuKim/KootPanKing/releases/download/v1.0.0/KootPanKing.zip"
-set "ZIP=KootPanKing.zip"
+set "ZIP=KootPanKingRelease.zip"
 set "DIR=KootPanKing"
 
 echo.

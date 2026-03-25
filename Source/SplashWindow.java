@@ -47,7 +47,7 @@ import java.net.URL;
 public class SplashWindow extends JFrame {
 	
     // ── 상수 ─────────────────────────────────────────────────────
-    private static final String TITLE      = "끝판왕 (KootPanKing)";
+    private static final String TITLE      = "끝판왕 (KootPanKing Ver 1.0f)";
     private static final Font   LOG_FONT   = new Font("Malgun Gothic", Font.PLAIN, 13);
     private static final Color  BG_COLOR   = new Color(235, 245, 255); // 연한 하늘색 배경
     private static final Color  FG_COLOR   = new Color( 20,  50,  90); // 진한 네이비 글자
@@ -1266,7 +1266,7 @@ public class SplashWindow extends JFrame {
 				String parentPath = parentDir != null ? parentDir.getAbsolutePath() : "";
 				java.io.File tempDir = new File(parentPath);
 				if (!tempDir.exists()) tempDir.mkdirs();				
-				java.io.File batFile = new java.io.File(tempDir, "DownLoad_Release.BAT");
+				java.io.File batFile = new java.io.File(tempDir, "DownLoad_UpGrade.BAT");
 				System.out.println("[Upgrade] DownLoad_Release.BAT : " + tempDir.getAbsolutePath());
 				
 				// 3. BOM 없는 UTF-8로 저장 (원본 그대로)

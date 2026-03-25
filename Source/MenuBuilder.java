@@ -11,7 +11,7 @@ import java.util.Date;
 	* 부모 클래스에 대한 직접 의존 없이 JPopupMenu 를 빌드한다.
 */
 public class MenuBuilder {
-    private static final String mainTitle = "끝판왕 (v1.0e)  [Alt-K]";
+    private static final String mainTitle = "끝판왕 (v1.0f)  [Alt-K]";
     private JPopupMenu menu;
     private JMenu      systemMenu;
     // ── 호스트(KootPanKing)가 제공해야 하는 콜백 인터페이스 ──

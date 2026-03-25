@@ -21,7 +21,7 @@ set "URL1=https://github.com/GarpsuKim/KootPanKing"
 set "URL2=releases/download/v1.0.0/KootPanKing.zip"
 set "URL=%URL1%/%URL2%" 
 
-set "ZIP=KootPanKing.zip"
+set "ZIP=KootPanKingRelease.zip"
 set "DIR=KootPanKing"
 
 echo.
