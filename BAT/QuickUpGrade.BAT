@@ -13,14 +13,14 @@ if not exist "%ZIP%" (
     pause
     exit /b
 )
-if exist  KootPanKing.exe   del KootPanKing.exe 
-if exist  app\KootPanKing.jsa   del app\KootPanKing.jsa 
-if exist  app\settings\KootPanKing.lock   del app\settings\KootPanKing.lock 
 echo ============================================
 echo   KootPanKing 다운로드 완료하였습니다.
 echo   [엔터]키를 누르세요
 echo ============================================
 pause
+if exist  KootPanKing.exe   del KootPanKing.exe 
+if exist  app\KootPanKing.jsa   del app\KootPanKing.jsa 
+if exist  app\settings\KootPanKing.lock   del app\settings\KootPanKing.lock 
 echo [2/3] 압축 해제 중...
 rem powershell -Command "Expand-Archive -Path '%ZIP%' -DestinationPath '%DIR%' -Force"
 powershell -Command "Expand-Archive -Path '%ZIP%' -DestinationPath . -Force"

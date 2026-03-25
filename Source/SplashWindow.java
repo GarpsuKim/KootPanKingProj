@@ -1262,7 +1262,7 @@ public class SplashWindow extends JFrame {
 				
 				String AppDir = resolveAppDir();
 				File AppDirFile = new File(AppDir);
-				String  saveZip =  AppDirFile.getAbsolutePath() + "appUpGrade.zip";
+				String  saveZip =  AppDirFile.getAbsolutePath() + "UpGrade.zip";
 				GitHubZipDownload(saveZip);
 
 				File parentDir = AppDirFile.getParentFile();  // 부모 폴더
