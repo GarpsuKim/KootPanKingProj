@@ -1392,10 +1392,9 @@ public class SplashWindow extends JFrame {
             log("   B 폴더: " + extractDir.getAbsolutePath());
 			
             // ── ⑦ updater.bat 생성 ──────────────────────────────
+            // ★ GitHub 에서 템플릿을 1줄씩 읽어 플레이스홀더 치환 후 저장
             // ★ bat 을 tmpDir 바깥(TEMP 루트)에 저장 → rmdir 시 자신이 삭제되는 문제 방지
             // ★ MS949 인코딩 → cmd.exe 가 경로의 한글을 올바르게 읽음
-            // ★ robocopy 사용: /E(하위폴더 포함) /IS(동일파일도 복사) /IT(타임스탬프 포함)
-            //   xcopy 와 달리 robocopy 는 Windows 기본 내장이며 경로 길이 제한이 없음
             java.io.File batFile = new java.io.File(
 			System.getProperty("java.io.tmpdir"), "kpk_updater.bat");
             // bat 실행 로그 파일 — tmpDir 바깥(TEMP 루트)에 저장, 자동 삭제 안 함
@@ -1405,75 +1404,55 @@ public class SplashWindow extends JFrame {
             String extractAbs = extractDir.getAbsolutePath();
             String tmpAbs     = finalTmpDir.getAbsolutePath();
             String logAbs     = batLog.getAbsolutePath();
-            String batContent =
-			"@echo off\r\n"
-			+ "setlocal\r\n"
-			// 로그 파일 초기화
-			+ "echo [kpk_updater] start > \"" + logAbs + "\"\r\n"
-			// [BUG2 FIX] 경로에 공백 포함 대비 따옴표 추가
-			+ "echo [kpk_updater] installDir : \"" + installAbs + "\" >> \"" + logAbs + "\"\r\n"
-			+ "echo [kpk_updater] extractDir : \"" + extractAbs + "\" >> \"" + logAbs + "\"\r\n"
-			// ── ① Java 프로세스 종료 대기
-			+ "echo [kpk_updater] waiting for Java process exit... >> \"" + logAbs + "\"\r\n"
-			+ "ping 127.0.0.1 -n 4 >nul\r\n"
-			+ "echo [kpk_updater] wait done >> \"" + logAbs + "\"\r\n"
-			// ── ② extractDir 존재 확인
-			+ "if not exist \"" + extractAbs + "\" (\r\n"
-			+ "  echo [kpk_updater] ERROR: extractDir not found >> \"" + logAbs + "\"\r\n"
-			+ "  goto :error\r\n"
-			+ ")\r\n"
-			+ "echo [kpk_updater] extractDir exists OK >> \"" + logAbs + "\"\r\n"
-			// ── ③ B → A 덮어쓰기 (robocopy: 종료코드 0~7 은 정상)
-			+ "echo [kpk_updater] robocopy start >> \"" + logAbs + "\"\r\n"
-			+ "robocopy \"" + extractAbs + "\" \"" + installAbs
-			+ "\" /E /IS /IT /NJH /NJS >> \"" + logAbs + "\" 2>&1\r\n"
-			+ "set RC=%errorlevel%\r\n"
-			+ "echo [kpk_updater] robocopy exit code: %RC% >> \"" + logAbs + "\"\r\n"
-			+ "if %RC% GTR 7 (\r\n"
-			+ "  echo [kpk_updater] ERROR: robocopy failed >> \"" + logAbs + "\"\r\n"
-			+ "  goto :error\r\n"
-			+ ")\r\n"
-			+ "echo [kpk_updater] robocopy OK >> \"" + logAbs + "\"\r\n"
-			// ── ④ 재시작 (절대경로로 실행)
-			+ "echo [kpk_updater] starting exe: \"" + installAbs + "\\" + finalExeName + "\" >> \"" + logAbs + "\"\r\n"
-			+ "if not exist \"" + installAbs + "\\" + finalExeName + "\" (\r\n"
-			+ "  echo [kpk_updater] ERROR: exe not found >> \"" + logAbs + "\"\r\n"
-			+ "  goto :error\r\n"
-			+ ")\r\n"
-			// cd 로 작업 디렉터리 이동 후 exe 직접 실행 (start /D 파싱 문제 회피)
-			+ "cd /d \"" + installAbs + "\"\r\n"
-			+ "echo [kpk_updater] cd done >> \"" + logAbs + "\"\r\n"
-			// [BUG3 FIX] start 타이틀을 빈문자열("")에서 명시적 문자열로 변경 → 환경 블록 오류 방지
-			+ "start \"KPK_Updater\" \"" + installAbs + "\\" + finalExeName + "\"\r\n"
-			+ "echo [kpk_updater] start issued >> \"" + logAbs + "\"\r\n"
-			// exe 가 JVM 초기화를 마칠 때까지 충분히 대기
-			+ "ping 127.0.0.1 -n 6 >nul\r\n"
-			+ "echo [kpk_updater] wait after start done >> \"" + logAbs + "\"\r\n"
-			+ "goto :cleanup\r\n"
-			// ── ⑤ 오류 처리
-			+ ":error\r\n"
-			+ "echo [kpk_updater] === UPGRADE FAILED === >> \"" + logAbs + "\"\r\n"
-			+ "echo.\r\n"
-			+ "echo *** 업그레이드 실패 ***\r\n"
-			+ "echo 로그 파일: " + logAbs + "\r\n"
-			+ "echo.\r\n"
-			+ "pause\r\n"
-			// [BUG1 FIX] :error 에서 :cleanup 으로 명시적 goto 추가 (fall-through 방지)
-			+ "goto :cleanup\r\n"
-			// ── ⑥ 임시 폴더 정리
-			+ ":cleanup\r\n"
-			+ "echo [kpk_updater] cleanup start >> \"" + logAbs + "\"\r\n"
-			+ "rmdir /S /Q \"" + tmpAbs + "\"\r\n"
-			+ "echo [kpk_updater] done >> \"" + logAbs + "\"\r\n"
-			// bat 자기 자신 삭제
-			+ "(goto) 2>nul & del \"%~f0\"\r\n";
-            try (java.io.PrintWriter pw = new java.io.PrintWriter(
-				new java.io.OutputStreamWriter(
-				new java.io.FileOutputStream(batFile), "MS949"))) {
-                pw.print(batContent);
+			
+            // ── GitHub 에서 템플릿 다운로드 → 플레이스홀더 치환 → bat 저장 ──
+            final String TEMPLATE_URL =
+			"https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/BAT/kpk_updater_template.bat";
+            log("⬇️  updater 템플릿 다운로드: " + TEMPLATE_URL);
+            try {
+                java.net.HttpURLConnection con =
+				(java.net.HttpURLConnection) new java.net.URI(TEMPLATE_URL)
+				.toURL().openConnection();
+                con.setConnectTimeout(10000);
+                con.setReadTimeout(15000);
+                con.connect();
+                int code = con.getResponseCode();
+                if (code != 200) {
+                    con.disconnect();
+                    swingLog("❌ 템플릿 다운로드 실패 (HTTP " + code + ")"); return;
+				}
+				
+				/*
+					try (java.io.BufferedReader br = new java.io.BufferedReader(
+					new java.io.InputStreamReader(con.getInputStream(),
+					java.nio.charset.StandardCharsets.UTF_8));
+					java.io.PrintWriter pw = new java.io.PrintWriter(
+					new java.io.OutputStreamWriter(
+					new java.io.FileOutputStream(batFile), "MS949"))) {
+				*/
+				
+				// 수정 코드 (ANSI = MS949, 단 BOM 없이)
+				try (java.io.PrintWriter pw = new java.io.PrintWriter(
+					new java.io.BufferedWriter(
+						new java.io.OutputStreamWriter(
+						new java.io.FileOutputStream(batFile), "MS949")))) {
+						
+						String line;
+						while ((line = br.readLine()) != null) {
+							line = line
+                            .replace("{{INSTALL_DIR}}", installAbs)
+                            .replace("{{EXTRACT_DIR}}", extractAbs)
+                            .replace("{{TMP_DIR}}",     tmpAbs)
+                            .replace("{{LOG_PATH}}",    logAbs)
+                            .replace("{{EXE_NAME}}",    finalExeName);
+							pw.print(line + "\r\n");
+						}
+				}
+                con.disconnect();
 				} catch (Exception ex) {
                 swingLog("❌ updater.bat 생성 실패: " + ex.getMessage()); return;
 			}
+			
             log("✅ updater.bat 생성 완료 → " + batFile.getAbsolutePath());
             log("📋 bat 실행 로그  → " + batLog.getAbsolutePath());
             log("   (업그레이드 후 위 파일에서 성공/실패 내용 확인 가능)");
@@ -1482,25 +1461,24 @@ public class SplashWindow extends JFrame {
             SwingUtilities.invokeLater(() -> {
                 log("🚀 업데이터 실행 — 프로그램을 종료합니다...");
                 setStatus("업그레이드 중... 재시작 대기");
-            });
+			});
             try { Thread.sleep(500); } catch (InterruptedException ignored) {}
-
+			
             try {
-                // [BUG3 FIX] "start", "" → "start", "KPK_Updater" 로 변경
-                // 빈 타이틀 "" 을 별도 인수로 넘기면 일부 Windows 에서
-                // "메모리 리소스가 부족하여 이 명령을 처리할 수 없습니다" 오류 발생
+                // cmd /c start "" batFile
+                // → 타이틀 "" 로 새 cmd 창 생성, Java 종료해도 bat 독립 실행됨
                 String batPath = batFile.getAbsolutePath();
-                new ProcessBuilder("cmd", "/c", "start", "KPK_Updater", batPath).start();
-            } catch (Exception ex) {
+                new ProcessBuilder("cmd", "/c", "start", "", batPath).start();
+				} catch (Exception ex) {
                 swingLog("❌ updater.bat 실행 실패: " + ex.getMessage()); return;
-            }
-
+			}
+			
             // bat 기동 여유 후 Java 종료
             try { Thread.sleep(500); } catch (InterruptedException ignored) {}
             SwingUtilities.invokeLater(() -> {
                 if (clockHost != null) clockHost.exitAll();
                 else System.exit(0);
-            });
+			});
 			
 		}, "UpgradeThread").start();
 	}
