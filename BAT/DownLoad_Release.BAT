@@ -13,7 +13,7 @@ rem  **********************************************************
 cd /d "%~dp0"
 SET "ROOT=%CD%"
 echo  현재폴더 = %ROOT%
-PAUSE
+
 echo ============================================
 echo   KootPanKing 다운로드 및 실행
 echo ============================================
@@ -38,8 +38,8 @@ echo [3/3] 실행...
 
 cd /d "%~dp0KootPanKing"
 if errorlevel 1 (
-    echo [ERROR] KootPanKing 폴더 없음
-    pause & exit /b 1
+echo [ERROR] KootPanKing 폴더 없음
+pause & exit /b 1
 )
 KootPanKing.exe
 rem   ■

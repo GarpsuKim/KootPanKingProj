@@ -1,13 +1,27 @@
 @echo off
-REM GitHubì—ì„œ DownLoad_Release.BAT ë‹¤ìš´ë¡œë“œ í›„ ì‹¤í–‰
+cd /d "%~dp0"
+SET "ROOT=%CD%"
+echo  ÇöÀçÆú´õ = %ROOT%
+PAUSE
 
-SET URL=https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/BAT/DownLoad_Release.BAT
-SET FILE_NAME=DownLoad_Release.BAT
+set "URL=https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/BAT/DownLoad_Release.zip"
+set "ZIP=DownLoad_Release.zip"
 
-echo ë‹¤ìš´ë¡œë“œ ì¤‘...
-powershell -Command "Invoke-WebRequest -Uri %URL% -OutFile %FILE_NAME%"
+echo [1/2] Downloading...
+powershell -Command "(New-Object Net.WebClient).DownloadFile('%URL%', '%ZIP%')"
 
-echo ì‹¤í–‰ ì¤‘...
-call %FILE_NAME%
+if not exist "%ZIP%" (
+    echo [ERROR] Download failed
+    pause & exit /b 1
+)
 
-pause
+echo [2/2] Extracting...
+powershell -Command "Expand-Archive -Path '%ZIP%' -DestinationPath '.' -Force"
+
+echo.
+echo ---- ¾ĞÃà ÇØÁ¦µÈ ÆÄÀÏ ¸ñ·Ï ----
+dir /b
+echo.
+
+rem type  DownLoad_Release.BAT
+call  DownLoad_Release.BAT
