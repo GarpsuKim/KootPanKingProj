@@ -41,7 +41,7 @@ if errorlevel 1 (
 echo [ERROR] KootPanKing 폴더 없음
 pause & exit /b 1
 )
-pause
+
 KootPanKing.exe
 rem   ■
 rem   ■   여기까지 복사 / 붙여넣기 하세요

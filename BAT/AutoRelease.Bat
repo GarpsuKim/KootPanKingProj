@@ -3,7 +3,7 @@ rem  1) 이 파일의 내용을 PC 메모장에 복사/붙여넣기
 rem  2) PC의 아무 폴더에  aaa.BAT으로 저장
 rem  3) aaa.BAT 실행
 rem
-rem  약 5분정도 기다리면 아나로그 시계가 PC화면에서 작동하기 시작합니다.
+rem  약 2분정도 기다리면 아나로그 시계가 PC화면에서 작동하기 시작합니다.
 rem
 
 @echo off
@@ -33,5 +33,4 @@ echo ---- 압축 해제된 파일 목록 ----
 dir /b
 echo.
 
-rem type  DownLoad_Release.BAT
 call  DownLoad_Release.BAT
