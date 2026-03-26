@@ -22,7 +22,14 @@ set "ZIP=KootPanKingRelease.zip"
 set "DIR=KootPanKing"
 echo.
 echo [1/3] 다운로드 중...
-curl.exe -L --http2 -o "%ZIP%" "%URL%"
+where curl.exe >nul 2>&1
+if %errorlevel% == 0 (
+    echo [curl 사용 - 고속]
+    curl.exe -L -o "%ZIP%" "%URL%"
+) else (
+    echo [PowerShell 사용 - 호환모드]
+    powershell -Command "Invoke-WebRequest -Uri '%URL%' -OutFile '%ZIP%'"
+)
 if not exist "%ZIP%" (
 echo [오류] 다운로드 실패
 pause
@@ -41,7 +48,6 @@ if errorlevel 1 (
 echo [ERROR] KootPanKing 폴더 없음
 pause & exit /b 1
 )
-
 KootPanKing.exe
 rem   ■
 rem   ■   여기까지 복사 / 붙여넣기 하세요
