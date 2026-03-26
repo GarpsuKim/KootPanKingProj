@@ -10,6 +10,10 @@ rem  [3] PC에서 "aaa.BAT" 실행 (익스플러로 또는 파일검색기에서 더블클릭)
 rem
 rem  **********************************************************
 @echo off
+cd /d "%~dp0"
+SET "ROOT=%CD%"
+echo  현재폴더 = %ROOT%
+PAUSE
 echo ============================================
 echo   KootPanKing 다운로드 및 실행
 echo ============================================
@@ -31,10 +35,13 @@ powershell -Command "Expand-Archive -Path '%ZIP%' -DestinationPath '%DIR%' -Forc
 echo 완료
 echo.
 echo [3/3] 실행...
-start "" "%DIR%\KootPanKing.exe"
-echo.
-echo 완료
-pause
+
+cd /d "%~dp0KootPanKing"
+if errorlevel 1 (
+    echo [ERROR] KootPanKing 폴더 없음
+    pause & exit /b 1
+)
+KootPanKing.exe
 rem   ■
 rem   ■   여기까지 복사 / 붙여넣기 하세요
 rem  **********************************************************
