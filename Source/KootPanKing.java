@@ -46,34 +46,34 @@ public class KootPanKing extends JFrame {
                 File f = new File(first).getAbsoluteFile();
                 EXE_PATH = f.getAbsolutePath();
                 System.out.println("[AppDir] EXE 감지: " + EXE_PATH);
-            } else if (first.endsWith(".jar")) {
+				} else if (first.endsWith(".jar")) {
                 File jarFile = new File(first).getAbsoluteFile();
                 File exeCandidate = new File(jarFile.getParentFile(), "KootPanKing.exe");
                 if (exeCandidate.exists()) {
                     EXE_PATH = exeCandidate.getAbsolutePath();
                     System.out.println("[AppDir] JAR 옆 EXE 감지: " + EXE_PATH);
-                } else {
+					} else {
                     EXE_PATH = jarFile.getAbsolutePath();
                     System.out.println("[AppDir] JAR 감지 (EXE 없음): " + EXE_PATH);
-                }
-            }
-        } catch (Exception ignored) {}
+				}
+			}
+		} catch (Exception ignored) {}
         // ② CodeSource 폴백
         if (EXE_PATH.isEmpty()) {
             try {
                 File loc = new File(KootPanKing.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI());
+				.getCodeSource().getLocation().toURI());
                 if (!loc.isDirectory()) {
                     File exeCandidate = new File(loc.getParentFile(), "KootPanKing.exe");
                     EXE_PATH = exeCandidate.exists()
-                        ? exeCandidate.getAbsolutePath() : loc.getAbsolutePath();
-                } else {
+					? exeCandidate.getAbsolutePath() : loc.getAbsolutePath();
+					} else {
                     File exeCandidate = new File(loc, "KootPanKing.exe");
                     if (exeCandidate.exists()) EXE_PATH = exeCandidate.getAbsolutePath();
-                }
+				}
                 System.out.println("[AppDir] CodeSource 감지: " + EXE_PATH);
-            } catch (Exception ignored) {}
-        }
+			} catch (Exception ignored) {}
+		}
         // ③ ProcessHandle 보완
         if (EXE_PATH.isEmpty()) {
             try {
@@ -86,11 +86,11 @@ public class KootPanKing extends JFrame {
                         && !name.equals("java")     && !name.equals("javaw")) {
                         EXE_PATH = f.getAbsolutePath();
                         System.out.println("[AppDir] ProcessHandle 감지: " + EXE_PATH);
-                    }
-                }
-            } catch (Exception ignored) {}
-        }
-
+					}
+				}
+			} catch (Exception ignored) {}
+		}
+		
         // ── 데이터 폴더는 항상 %APPDATA%\KootPanKing\ 고정 ──
         // 실행파일(exe/jar) 위치와 무관하게 데이터는 APPDATA 에만 저장
         String appData = System.getenv("APPDATA");
@@ -102,17 +102,17 @@ public class KootPanKing extends JFrame {
 	}
 	
     /**
-     * settings 폴더 경로 결정.
-     * %APPDATA%\KootPanKing\settings\ 로 고정.
-     * 재설치 시 삭제되지 않도록 실행 폴더 대신 APPDATA 아래에 위치.
-     */
+		* settings 폴더 경로 결정.
+		* %APPDATA%\KootPanKing\settings\ 로 고정.
+		* 재설치 시 삭제되지 않도록 실행 폴더 대신 APPDATA 아래에 위치.
+	*/
     private static String resolveSettingsDir() {
         String appData = System.getenv("APPDATA");
         if (appData == null) appData = System.getProperty("user.home");
         return appData + File.separator + "KootPanKing"
-                       + File.separator + "settings" + File.separator;
-    }
-
+		+ File.separator + "settings" + File.separator;
+	}
+	
     private static void ensureSettingsDir() {
         java.io.File s = new java.io.File(SETTINGS_DIR);
         if (!s.exists()) s.mkdirs();
@@ -2615,7 +2615,7 @@ public class KootPanKing extends JFrame {
             if (_ep == null || _ep.isEmpty()) {
                 String _al = AppLogger.getExeFilePath();
                 if (_al != null && !_al.isEmpty() && !_al.equals("(unknown)")) _ep = _al;
-            }
+			}
             if (_ep == null) _ep = "";
             if (_ep.isEmpty() && appRestarter != null) _ep = appRestarter.getCachedExePath();
             if (!_ep.isEmpty()) {
@@ -2624,10 +2624,10 @@ public class KootPanKing extends JFrame {
                 if (appRestarter != null && !appRestarter.getCachedExePath().equals(_ep)) {
                     appRestarter.setCachedPaths(_ep,
                         config.getProperty("app.javawPath", ""),
-                        config.getProperty("app.jsaPath",   ""));
-                }
-            }
-        }
+					config.getProperty("app.jsaPath",   ""));
+				}
+			}
+		}
 		
         // ── 부모 전용 항목 (자식은 저장하지 않음) ────────────────────
         if (!isChild) {
@@ -2836,43 +2836,50 @@ public class KootPanKing extends JFrame {
     //  Main
     // ═══════════════════════════════════════════════════════════
     public static void main(String[] args) {
-        ensureSettingsDir(); // ★ settings 폴더 생성 (lock 파일 접근 전에 먼저)
-		AppLogger.init();    // ★ 로거 초기화
-
-		// ★ 중복 실행 방지
-		if (!acquireSingleInstanceLock()) {
-			JOptionPane.showMessageDialog(null,
-				thisProgramName + " 이(가) 이미 실행 중입니다.",
-			"중복 실행 방지", JOptionPane.WARNING_MESSAGE);
-			System.exit(0);
-		}
-        System.out.println("[ " + thisProgramName + " ] [main] start");
-        AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 시작");
-        ToolManager.init(APP_DIR); // ★ yt-dlp / ffmpeg 준비 (백그라운드)
-		
-		System.out.println("[DEBUG] sun.java.command=" + System.getProperty("sun.java.command"));
-		System.out.println("[DEBUG] user.dir=" + System.getProperty("user.dir"));
-		
-		try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
-        catch (Exception ignored) {}
-		
-        // ── SplashWindow : 시계보다 먼저 메인 윈도우 표시 ────────
-        SwingUtilities.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                KootPanKing clock = new KootPanKing();
-                clock.saveConfig(); // ★ 시작 시 app.exePath 무조건 ini 저장
-                // ── mainWindow=true 인 경우에만 SplashWindow 표시 ──
-                if (clock.showMainWindow) {
-                    splashInstance = initSplashWindow();
-                    connectSplashToClock(splashInstance, clock);
-				}
+		try {
+			// 기존 main 내용
+			ensureSettingsDir(); // ★ settings 폴더 생성 (lock 파일 접근 전에 먼저)
+			AppLogger.init();    // ★ 로거 초기화
+			
+			// ★ 중복 실행 방지
+			if (!acquireSingleInstanceLock()) {
+				JOptionPane.showMessageDialog(null,
+					thisProgramName + " 이(가) 이미 실행 중입니다.",
+				"중복 실행 방지", JOptionPane.WARNING_MESSAGE);
+				System.exit(0);
 			}
-		});
-        // ---────────────────
-		
-        System.out.println("[ " + thisProgramName + " ] [main] bye bye");
-        AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 바이바이");
+			System.out.println("[ " + thisProgramName + " ] [main] start");
+			AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 시작");
+			ToolManager.init(APP_DIR); // ★ yt-dlp / ffmpeg 준비 (백그라운드)
+			
+			System.out.println("[DEBUG] sun.java.command=" + System.getProperty("sun.java.command"));
+			System.out.println("[DEBUG] user.dir=" + System.getProperty("user.dir"));
+			
+			try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
+			catch (Exception ignored) {}
+			
+			// ── SplashWindow : 시계보다 먼저 메인 윈도우 표시 ────────
+			SwingUtilities.invokeLater(new Runnable() {
+				@Override
+				public void run() {
+					KootPanKing clock = new KootPanKing();
+					clock.saveConfig(); // ★ 시작 시 app.exePath 무조건 ini 저장
+					// ── mainWindow=true 인 경우에만 SplashWindow 표시 ──
+					if (clock.showMainWindow) {
+						splashInstance = initSplashWindow();
+						connectSplashToClock(splashInstance, clock);
+					}
+				}
+			});
+			// ---────────────────
+			System.out.println("[ " + thisProgramName + " ] [main] bye bye");
+			AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 바이바이");
+			} catch (Exception e) {			e.printStackTrace();
+			try {	java.nio.file.Files.writeString(
+					java.nio.file.Paths.get("error.log"),
+					e.toString()				);
+			} catch (Exception ignored) {}
+		}
 	}  //     main(String[] args)
 	
     /** 팝업 메뉴 [시스템 → MainWindow] 에서 수동 호출 */
