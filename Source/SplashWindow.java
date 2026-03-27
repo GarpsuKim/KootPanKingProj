@@ -400,16 +400,14 @@ public class SplashWindow extends JFrame {
 		* 수신 성공 시 Kakao API 로 주소 변환 후 다이얼로그 + 로그에 출력한다.
 	*/
     private void doShowLocation() {
-        // location.html 경로: JAR 옆 폴더
-        java.io.File baseDir = null;
-        try {
-            java.security.CodeSource cs =
-			SplashWindow.class.getProtectionDomain().getCodeSource();
-            if (cs != null)
-			baseDir = new java.io.File(cs.getLocation().toURI()).getParentFile();
-		} catch (Exception ignored) {}
-        if (baseDir == null) baseDir = new java.io.File(".");
-		
+        // location.html 경로: %APPDATA%\KootPanKing\data\ 고정
+        String appData = System.getenv("APPDATA");
+        if (appData == null) appData = System.getProperty("user.home");
+        java.io.File baseDir = new java.io.File(appData
+            + java.io.File.separator + "KootPanKing"
+            + java.io.File.separator + "data");
+        if (!baseDir.exists()) baseDir.mkdirs();
+
         java.io.File htmlFile = new java.io.File(baseDir, "location.html");
         if (!htmlFile.exists()) {
             log("location.html 없음 — GitHub에서 다운로드 중...");
@@ -622,16 +620,14 @@ public class SplashWindow extends JFrame {
 	
     /** 실행파일 옆 폴더의 calendar.html File 객체를 반환한다. */
     private java.io.File getCalendarFile() {
-        java.io.File baseDir = null;
-        try {
-            java.security.CodeSource cs =
-			SplashWindow.class.getProtectionDomain().getCodeSource();
-            if (cs != null) {
-                baseDir = new java.io.File(cs.getLocation().toURI()).getParentFile();
-			}
-		} catch (Exception ignored) {}
-        if (baseDir == null) baseDir = new java.io.File(".");
-        return new java.io.File(baseDir, "calendar.html");
+        // 데이터 파일은 항상 %APPDATA%\KootPanKing\data\ 고정
+        String appData = System.getenv("APPDATA");
+        if (appData == null) appData = System.getProperty("user.home");
+        java.io.File dataDir = new java.io.File(appData
+            + java.io.File.separator + "KootPanKing"
+            + java.io.File.separator + "data");
+        if (!dataDir.exists()) dataDir.mkdirs();
+        return new java.io.File(dataDir, "calendar.html");
 	}
 	
     /**
@@ -1257,20 +1253,16 @@ public class SplashWindow extends JFrame {
 					java.io.File batFile = new java.io.File(tempDir, "DownLoad_Release.BAT");
 				*/
 				
-				// 2. app.exePath 기준 폴더 사용 (없으면 시스템 임시 폴더 폴백)
-				
-				
+				// 2. 업그레이드 파일은 시스템 임시 폴더에 저장 (실행파일 폴더에 쓰지 않음)
 				String AppDir = resolveAppDir();
-				File AppDirFile = new File(AppDir);
-				String  saveZip =  AppDirFile.getAbsolutePath() + "UpGrade.zip";
+				java.io.File tempDir = new java.io.File(System.getProperty("java.io.tmpdir"),
+					"KootPanKing_upgrade");
+				if (!tempDir.exists()) tempDir.mkdirs();
+				String saveZip = tempDir.getAbsolutePath() + java.io.File.separator + "UpGrade.zip";
 				GitHubZipDownload(saveZip);
 
-				File parentDir = AppDirFile.getParentFile();  // 부모 폴더
-				String parentPath = parentDir != null ? parentDir.getAbsolutePath() : "";
-				java.io.File tempDir = new File(parentPath);
-				if (!tempDir.exists()) tempDir.mkdirs();				
 				java.io.File batFile = new java.io.File(tempDir, "QuickUpGrade.BAT");
-				System.out.println("[Upgrade] DownLoad_Release.BAT : " + tempDir.getAbsolutePath());
+				System.out.println("[Upgrade] 업그레이드 임시 폴더: " + tempDir.getAbsolutePath());
 				
 				// 3. BOM 없는 UTF-8로 저장 (원본 그대로)
 				try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(
@@ -2031,115 +2023,46 @@ public class SplashWindow extends JFrame {
 	}
 	
     private String resolveAppDir() {
-		String EXE_PATH = ""; // ← 추가
-		
-        File jarDir = null;
+        // ── EXE_PATH 탐색 (실행파일 위치 파악용 — 데이터 경로와 무관) ──
+        String EXE_PATH = "";
         // ① sun.java.command
-		
-		if (jarDir == null) {
-			try {
-				String sc = System.getProperty("sun.java.command", "").trim();
-				String[] parts = sc.split("\\s+");
-				String first = parts[0];
-				
-				// ★ .exe가 있으면 무조건 .exe 우선
-				if (first.endsWith(".exe")) {
-					File f = new File(first).getAbsoluteFile();
-					EXE_PATH = f.getAbsolutePath();
-					jarDir = f.getParentFile();
-					System.out.println("[AppDir] EXE 감지: " + EXE_PATH);
-					} else if (first.endsWith(".jar")) {
-					// .jar일 경우 .exe가 있는지 같은 폴더에서 찾아본다
-					File jarFile = new File(first).getAbsoluteFile();
-					File parent = jarFile.getParentFile();
-					File exeCandidate = new File(parent, "KootPanKing.exe");
-					if (exeCandidate.exists()) {
-						EXE_PATH = exeCandidate.getAbsolutePath();
-						jarDir = parent;
-						System.out.println("[AppDir] JAR 옆 EXE 감지: " + EXE_PATH);
-						} else {
-						EXE_PATH = jarFile.getAbsolutePath();
-						jarDir = parent;
-						System.out.println("[AppDir] JAR 감지 (EXE 없음): " + EXE_PATH);
-					}
-				}
-			} catch (Exception ignored) {}
-		}
-		
-		
-		// ② CodeSource 폴백 (sun.java.command가 없을 때)
-		if (jarDir == null) {
-			try {
-				File loc = new File(KootPanKing.class.getProtectionDomain()
-				.getCodeSource().getLocation().toURI());
-				if (!loc.isDirectory()) {
-					// .class 또는 .jar 파일
-					File parent = loc.getParentFile();
-					File exeCandidate = new File(parent, "KootPanKing.exe");
-					if (exeCandidate.exists()) {
-						EXE_PATH = exeCandidate.getAbsolutePath();
-						jarDir = parent;
-						} else {
-						EXE_PATH = loc.getAbsolutePath();
-						jarDir = parent;
-					}
-					} else {
-					// IDE/class 직접 실행: loc이 디렉터리 → EXE_PATH 별도 탐색
-					jarDir = loc;
-					File exeCandidate = new File(loc, "KootPanKing.exe");
-					if (exeCandidate.exists()) {
-						EXE_PATH = exeCandidate.getAbsolutePath();
-					}
-					// EXE_PATH 여전히 빈 문자열이면 ProcessHandle 로 보완 (③에서 처리)
-				}
-				System.out.println("[AppDir] CodeSource 감지: " + EXE_PATH);
-			} catch (Exception ignored) {}
-		}
-		
-		// ③ ProcessHandle 보완 - EXE_PATH가 아직 비어있을 때만 시도
-		if (EXE_PATH.isEmpty()) {
-			try {
-				java.util.Optional<String> cmd = ProcessHandle.current().info().command();
-				if (cmd.isPresent()) {
-					File f = new File(cmd.get());
-					String name = f.getName().toLowerCase();
-					if (f.exists()
-						&& !name.equals("java.exe") && !name.equals("javaw.exe")
-						&& !name.equals("java")     && !name.equals("javaw")) {
-						EXE_PATH = f.getAbsolutePath();
-						if (jarDir == null) jarDir = f.getParentFile();
-						System.out.println("[AppDir] ProcessHandle 감지: " + EXE_PATH);
-					}
-				}
-			} catch (Exception ignored) {}
-		}
-		/*
-			if (jarDir == null) {
+        try {
+            String sc = System.getProperty("sun.java.command", "").trim();
+            String first = sc.split("\\s+")[0];
+            if (first.endsWith(".exe")) {
+                EXE_PATH = new File(first).getAbsolutePath();
+                System.out.println("[AppDir] EXE 감지: " + EXE_PATH);
+            } else if (first.endsWith(".jar")) {
+                File jarFile = new File(first).getAbsoluteFile();
+                File exeCandidate = new File(jarFile.getParentFile(), "KootPanKing.exe");
+                EXE_PATH = exeCandidate.exists()
+                    ? exeCandidate.getAbsolutePath() : jarFile.getAbsolutePath();
+                System.out.println("[AppDir] JAR 감지: " + EXE_PATH);
+            }
+        } catch (Exception ignored) {}
+        // ② CodeSource 폴백
+        if (EXE_PATH.isEmpty()) {
             try {
-			File loc = new File(KootPanKing.class.getProtectionDomain()
-			.getCodeSource().getLocation().toURI());
-			jarDir = loc.isDirectory() ? loc : loc.getParentFile();
-			} catch (Exception ignored) {}
-			}
-		*/
-        // 기존 설정 파일이 JAR 옆에 있으면 → 무조건 JAR 폴더 사용 (설정 유지)
-        if (jarDir != null && (
-			new File(jarDir, "settings" + File.separator + "clock_settings.ini").exists() ||
-		new File(jarDir, "clock_settings.ini").exists())) {
-		System.out.println("[AppDir] 기존 설정 발견 → JAR 폴더: " + jarDir.getAbsolutePath());
-		return jarDir.getAbsolutePath() + File.separator;
-		}
-        // JAR 폴더에 쓰기 가능하면 사용
-        if (jarDir != null && jarDir.canWrite()) {
-            System.out.println("[AppDir] JAR 폴더 사용: " + jarDir.getAbsolutePath());
-            return jarDir.getAbsolutePath() + File.separator;
-		}
-        // 쓰기 불가(C:\Program Files 등) → %APPDATA%\KootPanKing\
+                File loc = new File(KootPanKing.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI());
+                if (!loc.isDirectory()) {
+                    File exeCandidate = new File(loc.getParentFile(), "KootPanKing.exe");
+                    EXE_PATH = exeCandidate.exists()
+                        ? exeCandidate.getAbsolutePath() : loc.getAbsolutePath();
+                } else {
+                    File exeCandidate = new File(loc, "KootPanKing.exe");
+                    if (exeCandidate.exists()) EXE_PATH = exeCandidate.getAbsolutePath();
+                }
+                System.out.println("[AppDir] CodeSource 감지: " + EXE_PATH);
+            } catch (Exception ignored) {}
+        }
+
+        // ── 데이터 폴더는 항상 %APPDATA%\KootPanKing\ 고정 ──
         String appData = System.getenv("APPDATA");
         if (appData == null) appData = System.getProperty("user.home");
         File dir = new File(appData + File.separator + "KootPanKing");
         if (!dir.exists()) dir.mkdirs();
-        System.out.println("[AppDir] APPDATA 폴더 사용: " + dir.getAbsolutePath());
+        System.out.println("[AppDir] 데이터 폴더(APPDATA 고정): " + dir.getAbsolutePath());
         return dir.getAbsolutePath() + File.separator;
 	}
 	

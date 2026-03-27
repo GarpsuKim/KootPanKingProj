@@ -27,7 +27,7 @@ public class KootPanKing extends JFrame {
     // ── 설정 파일 저장 폴더 결정 (우선순위 3단계) ─────────────────
 	static String EXE_PATH = ""; // ← 추가
     private static final String APP_DIR      = resolveAppDir();
-    static final String SETTINGS_DIR = APP_DIR + "settings" + File.separator;
+    static final String SETTINGS_DIR = resolveSettingsDir();
     static final String CONFIG_FILE  = SETTINGS_DIR + "clock_settings.ini";
 	
     // ── 인스턴스별 설정 파일 경로 및 자식 여부 ─────────────────────
@@ -37,116 +37,82 @@ public class KootPanKing extends JFrame {
     boolean isChild      = false;        // 복사 생성자에서 true 로 설정 (MenuBuilder에서 접근)
 	
     private static String resolveAppDir() {
-        File jarDir = null;
+        // ── EXE_PATH 탐색 (실행파일 위치 파악용 — 데이터 경로와 무관) ──
         // ① sun.java.command
-		
-		if (jarDir == null) {
-			try {
-				String sc = System.getProperty("sun.java.command", "").trim();
-				String[] parts = sc.split("\\s+");
-				String first = parts[0];
-				
-				// ★ .exe가 있으면 무조건 .exe 우선
-				if (first.endsWith(".exe")) {
-					File f = new File(first).getAbsoluteFile();
-					EXE_PATH = f.getAbsolutePath();
-					jarDir = f.getParentFile();
-					System.out.println("[AppDir] EXE 감지: " + EXE_PATH);
-					} else if (first.endsWith(".jar")) {
-					// .jar일 경우 .exe가 있는지 같은 폴더에서 찾아본다
-					File jarFile = new File(first).getAbsoluteFile();
-					File parent = jarFile.getParentFile();
-					File exeCandidate = new File(parent, "KootPanKing.exe");
-					if (exeCandidate.exists()) {
-						EXE_PATH = exeCandidate.getAbsolutePath();
-						jarDir = parent;
-						System.out.println("[AppDir] JAR 옆 EXE 감지: " + EXE_PATH);
-						} else {
-						EXE_PATH = jarFile.getAbsolutePath();
-						jarDir = parent;
-						System.out.println("[AppDir] JAR 감지 (EXE 없음): " + EXE_PATH);
-					}
-				}
-			} catch (Exception ignored) {}
-		}
-		
-		
-		// ② CodeSource 폴백 (sun.java.command가 없을 때)
-		if (jarDir == null) {
-			try {
-				File loc = new File(KootPanKing.class.getProtectionDomain()
-				.getCodeSource().getLocation().toURI());
-				if (!loc.isDirectory()) {
-					// .class 또는 .jar 파일
-					File parent = loc.getParentFile();
-					File exeCandidate = new File(parent, "KootPanKing.exe");
-					if (exeCandidate.exists()) {
-						EXE_PATH = exeCandidate.getAbsolutePath();
-						jarDir = parent;
-						} else {
-						EXE_PATH = loc.getAbsolutePath();
-						jarDir = parent;
-					}
-					} else {
-					// IDE/class 직접 실행: loc이 디렉터리 → EXE_PATH 별도 탐색
-					jarDir = loc;
-					File exeCandidate = new File(loc, "KootPanKing.exe");
-					if (exeCandidate.exists()) {
-						EXE_PATH = exeCandidate.getAbsolutePath();
-					}
-					// EXE_PATH 여전히 빈 문자열이면 ProcessHandle 로 보완 (③에서 처리)
-				}
-				System.out.println("[AppDir] CodeSource 감지: " + EXE_PATH);
-			} catch (Exception ignored) {}
-		}
-
-		// ③ ProcessHandle 보완 - EXE_PATH가 아직 비어있을 때만 시도
-		if (EXE_PATH.isEmpty()) {
-			try {
-				java.util.Optional<String> cmd = ProcessHandle.current().info().command();
-				if (cmd.isPresent()) {
-					File f = new File(cmd.get());
-					String name = f.getName().toLowerCase();
-					if (f.exists()
-						&& !name.equals("java.exe") && !name.equals("javaw.exe")
-						&& !name.equals("java")     && !name.equals("javaw")) {
-						EXE_PATH = f.getAbsolutePath();
-						if (jarDir == null) jarDir = f.getParentFile();
-						System.out.println("[AppDir] ProcessHandle 감지: " + EXE_PATH);
-					}
-				}
-			} catch (Exception ignored) {}
-		}
-		/*
-			if (jarDir == null) {
+        try {
+            String sc = System.getProperty("sun.java.command", "").trim();
+            String first = sc.split("\\s+")[0];
+            if (first.endsWith(".exe")) {
+                File f = new File(first).getAbsoluteFile();
+                EXE_PATH = f.getAbsolutePath();
+                System.out.println("[AppDir] EXE 감지: " + EXE_PATH);
+            } else if (first.endsWith(".jar")) {
+                File jarFile = new File(first).getAbsoluteFile();
+                File exeCandidate = new File(jarFile.getParentFile(), "KootPanKing.exe");
+                if (exeCandidate.exists()) {
+                    EXE_PATH = exeCandidate.getAbsolutePath();
+                    System.out.println("[AppDir] JAR 옆 EXE 감지: " + EXE_PATH);
+                } else {
+                    EXE_PATH = jarFile.getAbsolutePath();
+                    System.out.println("[AppDir] JAR 감지 (EXE 없음): " + EXE_PATH);
+                }
+            }
+        } catch (Exception ignored) {}
+        // ② CodeSource 폴백
+        if (EXE_PATH.isEmpty()) {
             try {
-			File loc = new File(KootPanKing.class.getProtectionDomain()
-			.getCodeSource().getLocation().toURI());
-			jarDir = loc.isDirectory() ? loc : loc.getParentFile();
-			} catch (Exception ignored) {}
-			}
-		*/
-        // 기존 설정 파일이 JAR 옆에 있으면 → 무조건 JAR 폴더 사용 (설정 유지)
-        if (jarDir != null && (
-			new File(jarDir, "settings" + File.separator + "clock_settings.ini").exists() ||
-		new File(jarDir, "clock_settings.ini").exists())) {
-		System.out.println("[AppDir] 기존 설정 발견 → JAR 폴더: " + jarDir.getAbsolutePath());
-		return jarDir.getAbsolutePath() + File.separator;
-		}
-        // JAR 폴더에 쓰기 가능하면 사용
-        if (jarDir != null && jarDir.canWrite()) {
-            System.out.println("[AppDir] JAR 폴더 사용: " + jarDir.getAbsolutePath());
-            return jarDir.getAbsolutePath() + File.separator;
-		}
-        // 쓰기 불가(C:\Program Files 등) → %APPDATA%\KootPanKing\
+                File loc = new File(KootPanKing.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI());
+                if (!loc.isDirectory()) {
+                    File exeCandidate = new File(loc.getParentFile(), "KootPanKing.exe");
+                    EXE_PATH = exeCandidate.exists()
+                        ? exeCandidate.getAbsolutePath() : loc.getAbsolutePath();
+                } else {
+                    File exeCandidate = new File(loc, "KootPanKing.exe");
+                    if (exeCandidate.exists()) EXE_PATH = exeCandidate.getAbsolutePath();
+                }
+                System.out.println("[AppDir] CodeSource 감지: " + EXE_PATH);
+            } catch (Exception ignored) {}
+        }
+        // ③ ProcessHandle 보완
+        if (EXE_PATH.isEmpty()) {
+            try {
+                java.util.Optional<String> cmd = ProcessHandle.current().info().command();
+                if (cmd.isPresent()) {
+                    File f = new File(cmd.get());
+                    String name = f.getName().toLowerCase();
+                    if (f.exists()
+                        && !name.equals("java.exe") && !name.equals("javaw.exe")
+                        && !name.equals("java")     && !name.equals("javaw")) {
+                        EXE_PATH = f.getAbsolutePath();
+                        System.out.println("[AppDir] ProcessHandle 감지: " + EXE_PATH);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // ── 데이터 폴더는 항상 %APPDATA%\KootPanKing\ 고정 ──
+        // 실행파일(exe/jar) 위치와 무관하게 데이터는 APPDATA 에만 저장
         String appData = System.getenv("APPDATA");
         if (appData == null) appData = System.getProperty("user.home");
         File dir = new File(appData + File.separator + "KootPanKing");
         if (!dir.exists()) dir.mkdirs();
-        System.out.println("[AppDir] APPDATA 폴더 사용: " + dir.getAbsolutePath());
+        System.out.println("[AppDir] 데이터 폴더(APPDATA 고정): " + dir.getAbsolutePath());
         return dir.getAbsolutePath() + File.separator;
 	}
 	
+    /**
+     * settings 폴더 경로 결정.
+     * %APPDATA%\KootPanKing\settings\ 로 고정.
+     * 재설치 시 삭제되지 않도록 실행 폴더 대신 APPDATA 아래에 위치.
+     */
+    private static String resolveSettingsDir() {
+        String appData = System.getenv("APPDATA");
+        if (appData == null) appData = System.getProperty("user.home");
+        return appData + File.separator + "KootPanKing"
+                       + File.separator + "settings" + File.separator;
+    }
+
     private static void ensureSettingsDir() {
         java.io.File s = new java.io.File(SETTINGS_DIR);
         if (!s.exists()) s.mkdirs();
@@ -971,10 +937,11 @@ public class KootPanKing extends JFrame {
 		
         // ── Google Calendar 초기화 (백그라운드) ──────────────────
         // credentials.json 이 존재할 때만 시도 (없으면 조용히 건너뜀)
-        // ★ APP_DIR 을 주입한 인스턴스로 credentialsExist() 를 호출해야
-        //    KootPanKing 이 APPDATA 로 우회한 경우에도 정확한 경로를 사용한다.
+        // ★ SETTINGS_DIR 을 주입 — credentials/token 파일이 settings\ 폴더에 있으므로
+        //    tg/kakao(APP_DIR 주입 후 내부에서 settings\ 를 붙임) 와 달리
+        //    GoogleCalendarService 는 SETTINGS_DIR 을 직접 받아 파일명만 붙인다.
         calendarService = new GoogleCalendarService();
-        calendarService.setAppDir(APP_DIR);
+        calendarService.setAppDir(SETTINGS_DIR);  // ★ APP_DIR 대신 SETTINGS_DIR 주입 — credentials/token 은 settings\ 폴더에 있음
         if (parent == null && calendarService.credentialsExist()) {
             new Thread(() -> {
                 if (calendarService.init()) {
@@ -1851,17 +1818,11 @@ public class KootPanKing extends JFrame {
         clockPanel.repaint();
 	}
 	
-    /** 현재 카메라 프레임을 실행폴더/img/ 에 저장 */
+    /** 현재 카메라 프레임을 %APPDATA%\KootPanKing\img\ 에 저장 */
     void captureCamera() {
         if (camera == null) return;
-        // 실행 파일 폴더 기준 saveDir 결정
-        File saveDir;
-        String exePath = !EXE_PATH.isEmpty() ? EXE_PATH : AppLogger.getExeFilePath();
-        if (exePath != null && !exePath.isEmpty() && !exePath.equals("(unknown)")) {
-            saveDir = new File(exePath).getParentFile();
-			} else {
-            saveDir = new File(System.getProperty("user.dir"));
-		}
+        // 데이터 폴더는 항상 APPDATA 고정 — 실행파일 위치와 무관
+        File saveDir = new File(APP_DIR);
         String saved = camera.capture(saveDir);
         if (saved != null) {
             // 저장 완료 토스트(짧은 팝업) 대신 타이틀바 없는 시계라 콘솔 출력
@@ -2875,16 +2836,16 @@ public class KootPanKing extends JFrame {
     //  Main
     // ═══════════════════════════════════════════════════════════
     public static void main(String[] args) {
-		// ★ 중복 실행 방지 - 가장 먼저 실행
+        ensureSettingsDir(); // ★ settings 폴더 생성 (lock 파일 접근 전에 먼저)
+		AppLogger.init();    // ★ 로거 초기화
+
+		// ★ 중복 실행 방지
 		if (!acquireSingleInstanceLock()) {
 			JOptionPane.showMessageDialog(null,
 				thisProgramName + " 이(가) 이미 실행 중입니다.",
 			"중복 실행 방지", JOptionPane.WARNING_MESSAGE);
 			System.exit(0);
 		}
-		
-		AppLogger.init();   // ★ 로거 초기화 - 가장 먼저 실행
-        ensureSettingsDir(); // ★ settings 폴더 생성
         System.out.println("[ " + thisProgramName + " ] [main] start");
         AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 시작");
         ToolManager.init(APP_DIR); // ★ yt-dlp / ffmpeg 준비 (백그라운드)

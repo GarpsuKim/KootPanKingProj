@@ -176,7 +176,15 @@ public class ToolManager {
     // 실행 유틸
     // =========================
     public static void runYtDlp(String url) throws Exception {
-        new ProcessBuilder(TOOLS_DIR + File.separator + "yt-dlp.exe", "-o", "output.mp4", url)
+        // 다운로드 출력 폴더: %APPDATA%\KootPanKing\download\
+        String appData = System.getenv("APPDATA");
+        if (appData == null) appData = System.getProperty("user.home");
+        String downloadDir = appData + File.separator + "KootPanKing"
+            + File.separator + "download";
+        Files.createDirectories(Paths.get(downloadDir));
+        String outputTemplate = downloadDir + File.separator + "%(title)s.%(ext)s";
+        new ProcessBuilder(TOOLS_DIR + File.separator + "yt-dlp.exe",
+                "-o", outputTemplate, url)
             .inheritIO().start().waitFor();
     }
 

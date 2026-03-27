@@ -37,9 +37,14 @@ public class Kakao {
     /** Kakao.txt 를 HTML 로 변환하여 기본 브라우저로 표시 */
     void showKakaoGuide() {
         try {
-            // Kakao.txt 경로: APP_DIR 기준
-            File txtFile = new File(appDir.isEmpty() ? "." : appDir, "Kakao.txt");
-			
+            // Kakao.txt 경로: %APPDATA%\KootPanKing\data\ 고정
+            String appData = System.getenv("APPDATA");
+            if (appData == null) appData = System.getProperty("user.home");
+            File dataDir = new File(appData + File.separator
+                + "KootPanKing" + File.separator + "data");
+            if (!dataDir.exists()) dataDir.mkdirs();
+            File txtFile = new File(dataDir, "Kakao.txt");
+
             String content = "";
             if (txtFile.exists()) {
                 java.io.BufferedReader br = new java.io.BufferedReader(
@@ -51,7 +56,8 @@ public class Kakao {
 					br.close();
 					content = sb.toString();
 					} else {
-					content = "Kakao.txt 파일을 찾을 수 없습니다.\n실행 파일과 같은 폴더에 Kakao.txt 를 넣어주세요.";
+					content = "Kakao.txt 파일을 찾을 수 없습니다.\n"
+                        + "파일 위치: " + txtFile.getAbsolutePath();
 			}
 			
             // URL 을 <a href> 링크로 변환

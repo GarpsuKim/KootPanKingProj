@@ -33,17 +33,18 @@ import org.json.simple.parser.JSONParser;
 public class GoogleCalendarService {
 
     // ── 상수 ──────────────────────────────────────────────────────
-    private static final String CREDENTIALS_FILE = "settings/credentials.json";
-    private static final String TOKEN_FILE        = "settings/token.json";
+    private static final String CREDENTIALS_FILE = "credentials.json";
+    private static final String TOKEN_FILE        = "token.json";
     private static final String REDIRECT_URI      = "http://localhost:8888/Callback";
     private static final String SCOPE             = "https://www.googleapis.com/auth/calendar.readonly";
     private static final String TOKEN_URL         = "https://oauth2.googleapis.com/token";
     private static final String CALENDAR_API      = "https://www.googleapis.com/calendar/v3";
 
-    // ── APP_DIR 주입 (KootPanKing.APP_DIR 을 생성 후 setAppDir() 로 주입) ──
-    // resolveFile() 이 독자적으로 경로를 탐색하면 KootPanKing 이 APPDATA 폴더로
-    // 우회한 경우 다른 폴더를 가리켜 credentials/token 을 찾지 못한다.
-    // KootPanKing 에서 calendarService.setAppDir(APP_DIR) 를 호출해 주입한다.
+    // ── SETTINGS_DIR 주입 (KootPanKing.SETTINGS_DIR 을 생성 후 setAppDir() 로 주입) ──
+    // KootPanKing.SETTINGS_DIR(%APPDATA%\KootPanKing\settings\) 과 동일한 폴더를 사용.
+    // tg/kakao 는 APP_DIR 을 받아 내부에서 settings\ 를 붙이지만,
+    // GoogleCalendarService 는 SETTINGS_DIR 을 직접 받아 파일명만 붙인다.
+    // ★ KootPanKing 에서 calendarService.setAppDir(SETTINGS_DIR) 로 호출할 것.
     private String appDir = "";
 
     // ── OAuth 토큰 상태 ────────────────────────────────────────────
@@ -55,7 +56,7 @@ public class GoogleCalendarService {
 
     private boolean initialized = false;
 
-    /** KootPanKing.APP_DIR 을 주입한다. init() 호출 전에 반드시 설정해야 한다. */
+    /** KootPanKing.SETTINGS_DIR 을 주입한다. init() 호출 전에 반드시 설정해야 한다. */
     public void setAppDir(String dir) {
         this.appDir = (dir != null) ? dir : "";
     }
@@ -107,11 +108,11 @@ public class GoogleCalendarService {
     /**
      * credentials.json 준비 여부 확인.
      *
-     * 1) appDir/settings/credentials.json 이 있으면 → true
+     * 1) appDir(SETTINGS_DIR)/credentials.json 이 있으면 → true
      * 2) 없으면 false (로그인 생략)
      *
      * ★ static → 인스턴스 메서드로 변경.
-     *    KootPanKing 에서 setAppDir(APP_DIR) 주입 후 호출해야 정확한 경로를 사용한다.
+     *    KootPanKing 에서 setAppDir(SETTINGS_DIR) 주입 후 호출해야 정확한 경로를 사용한다.
      *    하드코딩된 C:\\temp 폴백 제거.
      */
     public boolean credentialsExist() {
@@ -124,11 +125,12 @@ public class GoogleCalendarService {
 
     /**
      * 하위 호환용 static 오버로드.
-     * KootPanKing 외부에서 appDir 없이 호출하는 기존 코드를 위해 유지.
+     * KootPanKing 외부에서 settingsDir 없이 호출하는 기존 코드를 위해 유지.
+     * ★ settingsDirPath 에는 KootPanKing.SETTINGS_DIR 을 넘길 것.
      */
-    public static boolean credentialsExist(String appDirPath) {
+    public static boolean credentialsExist(String settingsDirPath) {
         GoogleCalendarService tmp = new GoogleCalendarService();
-        tmp.setAppDir(appDirPath);
+        tmp.setAppDir(settingsDirPath);
         return tmp.credentialsExist();
     }
 
@@ -577,31 +579,21 @@ public class GoogleCalendarService {
     }
 
     /**
-     * 실행 파일 폴더 기준으로 파일 경로 해석.
-     * ★ static → 인스턴스 메서드로 변경.
-     *   appDir 가 주입되어 있으면 최우선 사용 → KootPanKing 이 APPDATA 로 우회해도
-     *   동일한 폴더를 가리킨다.
+     * SETTINGS_DIR 기준으로 파일 경로 해석.
+     * ★ appDir = KootPanKing.SETTINGS_DIR (%APPDATA%\KootPanKing\settings\) 을 주입받아
+     *   파일명만 붙인다. KootPanKing 이 APPDATA 로 우회해도 동일한 폴더를 가리킨다.
+     *   fallback: 항상 %APPDATA%\KootPanKing\settings\ 고정
      */
     private File resolveFile(String name) {
-        // ① KootPanKing.APP_DIR 주입값 우선
+        // ① KootPanKing.SETTINGS_DIR 주입값 우선 (파일명만 붙임)
         if (!appDir.isEmpty()) return new File(appDir, name);
-        // ② sun.java.command
-        try {
-            String sc = System.getProperty("sun.java.command", "").trim();
-            String first = sc.split("\\s+")[0];
-            if (first.endsWith(".jar") || first.endsWith(".exe")) {
-                File f = new File(first).getAbsoluteFile();
-                if (f.getParentFile() != null) return new File(f.getParentFile(), name);
-            }
-        } catch (Exception ignored) {}
-        // ③ CodeSource
-        try {
-            File f = new File(GoogleCalendarService.class
-                    .getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsoluteFile();
-            File dir = f.isDirectory() ? f : f.getParentFile();
-            if (dir != null) return new File(dir, name);
-        } catch (Exception ignored) {}
-        return new File(System.getProperty("user.dir"), name);
+        // ② fallback: 항상 %APPDATA%\KootPanKing\settings\ 고정
+        String appData = System.getenv("APPDATA");
+        if (appData == null) appData = System.getProperty("user.home");
+        File settingsDir = new File(appData + File.separator
+            + "KootPanKing" + File.separator + "settings");
+        if (!settingsDir.exists()) settingsDir.mkdirs();
+        return new File(settingsDir, name);
     }
 
     // ── 텔레그램 메시지 포맷 (기존 동일) ────────────────────────

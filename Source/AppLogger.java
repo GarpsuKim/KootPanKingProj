@@ -41,30 +41,21 @@ public class AppLogger {
     /** 로거 초기화 - main() 가장 먼저 호출 */
     public static void init() {
 	
-	/*
-		// ★ 현재 폴더에서 exe 우선 탐색
-		try {
-			File dir = new File(System.getProperty("user.dir"));
-			File[] exes = dir.listFiles(f -> f.getName().toLowerCase().endsWith(".exe"));
-			if (exes != null && exes.length > 0) {
-				return exes[0].getAbsolutePath();
-			}
-		} catch (Exception ignored) {}
-	*/	
         // ① sun.java.command / ProcessHandle / CodeSource 순으로 실행 파일 경로 탐색
         String exePath = resolveExePath();
         exeFilePath = exePath != null ? exePath : "(unknown)";
 		
-        // 실행 폴더 결정
+        // 실행 파일 정보 (baseName 용도로만 사용)
         File exeFile = exePath != null ? new File(exePath) : null;
-        File runDir  = (exeFile != null && exeFile.getParentFile() != null)
-		? exeFile.getParentFile()
-		: new File(System.getProperty("user.dir"));
-		
-        // log 하위 폴더 생성
-        File logDir = new File(runDir, "log");
+
+        // log 폴더: %APPDATA%\KootPanKing\log\
+        // 재설치 시 삭제되지 않도록 실행 폴더 대신 APPDATA 아래에 고정
+        String appData = System.getenv("APPDATA");
+        if (appData == null) appData = System.getProperty("user.home");
+        File logDir = new File(appData + File.separator
+                             + "KootPanKing" + File.separator + "log");
         if (!logDir.exists()) logDir.mkdirs();
-		
+
         // 로그 파일명: <실행파일 기본명>_yyyyMMdd_HHmmss.txt
         String baseName  = (exeFile != null) ? stripExt(exeFile.getName()) : "app";
         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());

@@ -994,8 +994,14 @@ public class MenuBuilder {
     private java.util.List<String[]> loadStreamIni() {
         java.util.List<String[]> list = new java.util.ArrayList<>();
 
-        // settings/ 폴더 기준 (KootPanKing.CONFIG_FILE 과 같은 폴더)
+        // settings/ 폴더 기준 — CONFIG_FILE 과 같은 폴더 (항상 APPDATA\KootPanKing\settings\)
         java.io.File appDir  = new java.io.File(host.getConfigFilePath()).getParentFile();
+        if (appDir == null) {
+            String ad = System.getenv("APPDATA");
+            if (ad == null) ad = System.getProperty("user.home");
+            appDir = new java.io.File(ad + java.io.File.separator
+                + "KootPanKing" + java.io.File.separator + "settings");
+        }
         java.io.File iniFile = new java.io.File(appDir, "youTubeCctv.ini");
         System.out.println("[StreamIni] 탐색 경로: " + iniFile.getAbsolutePath());
 
@@ -2343,9 +2349,14 @@ public class MenuBuilder {
 	
     /** 실행파일 옆 폴더의 calendar.html File 객체를 반환한다. */
     private java.io.File getCalendarFile() {
-        java.io.File baseDir = new java.io.File(host.getConfigFilePath()).getParentFile();
-        if (baseDir == null) baseDir = new java.io.File(".");
-        return new java.io.File(baseDir, "calendar.html");
+        // 데이터 파일은 항상 %APPDATA%\KootPanKing\data\ 고정
+        String appData = System.getenv("APPDATA");
+        if (appData == null) appData = System.getProperty("user.home");
+        java.io.File dataDir = new java.io.File(appData
+            + java.io.File.separator + "KootPanKing"
+            + java.io.File.separator + "data");
+        if (!dataDir.exists()) dataDir.mkdirs();
+        return new java.io.File(dataDir, "calendar.html");
 	}
 	
 }  // MenuBuilder 닫는 괄호

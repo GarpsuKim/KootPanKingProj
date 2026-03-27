@@ -1185,25 +1185,14 @@ public class TelegramBot {
 	}
 	/** jar / exe / class 어떤 방식으로 실행해도 실행 파일의 폴더를 반환 */
 	private static java.io.File resolveRunDir() {
-		// ① sun.java.command (jar / exe)
-		try {
-			String sc = System.getProperty("sun.java.command", "").trim();
-			String first = sc.split("\\s+")[0];
-			if (first.endsWith(".jar") || first.endsWith(".exe")) {
-				java.io.File f = new java.io.File(first).getAbsoluteFile();
-				if (f.getParentFile() != null) return f.getParentFile();
-			}
-		} catch (Exception ignored) {}
-		// ② CodeSource (class / jar)
-		try {
-			java.io.File f = new java.io.File(
-				TelegramBot.class.getProtectionDomain()
-			.getCodeSource().getLocation().toURI()).getAbsoluteFile();
-			java.io.File parent = f.isDirectory() ? f : f.getParentFile();
-			if (parent != null) return parent;
-		} catch (Exception ignored) {}
-		// ③ 최후 fallback
-		return new java.io.File(System.getProperty("user.home"));
+		// 데이터 파일은 항상 %APPDATA%\KootPanKing\ 고정
+		// 실행파일(exe/jar) 위치와 무관하게 APPDATA 에만 저장
+		String appData = System.getenv("APPDATA");
+		if (appData == null) appData = System.getProperty("user.home");
+		java.io.File dir = new java.io.File(appData
+			+ java.io.File.separator + "KootPanKing");
+		if (!dir.exists()) dir.mkdirs();
+		return dir;
 	}
     // ── 위험 명령어 차단 목록 ─────────────────────────────────────
     /**
