@@ -15,10 +15,10 @@ echo ============================================
 set "URL=https://github.com/GarpsuKim/KootPanKing/releases/download/v1.0.0/KootPanKing.zip"
 set "ZIP=%ROOT%/KootPanKingUpgrade.zip"
 set "DIR=%ROOT%/KootPanKing"
-timeout /t 10 /nobreak
 if exist  "%ZIP%"   del "%ZIP%"
 echo.
 echo [1/3] 다운로드 중...
+timeout /t 10 /nobreak
 where curl.exe >nul 2>&1
 if %errorlevel% == 0 (
     echo [curl 사용 - 고속]
