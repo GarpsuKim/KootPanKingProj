@@ -36,45 +36,67 @@ public class KootPanKing extends JFrame {
     String  myConfigFile = CONFIG_FILE; // 기본값: 부모와 동일 (같은 클래스 내 connectSplashToClock 에서 접근)
     boolean isChild      = false;        // 복사 생성자에서 true 로 설정 (MenuBuilder에서 접근)
 
-    private static String resolveAppDir() {
+    static String resolveAppDir() {
         // ── EXE_PATH 탐색 (실행파일 위치 파악용 — 데이터 경로와 무관) ──
-        // ① sun.java.command
+        // ① sun.java.command — quoted 경로(공백 포함) 대응 (AppLogger 기준)
         try {
             String sc = System.getProperty("sun.java.command", "").trim();
-            String first = sc.split("\\s+")[0];
+            String first;
+            if (sc.startsWith("\"")) {
+                int end = sc.indexOf("\"", 1);
+                first = (end > 1) ? sc.substring(1, end) : "";
+            } else {
+                first = sc.split("\\s+")[0];
+            }
             if (first.endsWith(".exe")) {
-                File f = new File(first).getAbsoluteFile();
-                EXE_PATH = f.getAbsolutePath();
+                EXE_PATH = new File(first).getAbsolutePath();
                 System.out.println("[AppDir] EXE 감지: " + EXE_PATH);
-				} else if (first.endsWith(".jar")) {
+            } else if (first.endsWith(".jar")) {
                 File jarFile = new File(first).getAbsoluteFile();
                 File exeCandidate = new File(jarFile.getParentFile(), "KootPanKing.exe");
                 if (exeCandidate.exists()) {
                     EXE_PATH = exeCandidate.getAbsolutePath();
                     System.out.println("[AppDir] JAR 옆 EXE 감지: " + EXE_PATH);
-					} else {
+                } else {
                     EXE_PATH = jarFile.getAbsolutePath();
                     System.out.println("[AppDir] JAR 감지 (EXE 없음): " + EXE_PATH);
-				}
-			}
-		} catch (Exception ignored) {}
-        // ② CodeSource 폴백
+                }
+            }
+        } catch (Exception ignored) {}
+        // ② CodeSource 폴백 — javaw.exe 반환 시 건너뜀 (AppLogger 기준)
         if (EXE_PATH.isEmpty()) {
             try {
-                File loc = new File(KootPanKing.class.getProtectionDomain()
-				.getCodeSource().getLocation().toURI());
-                if (!loc.isDirectory()) {
-                    File exeCandidate = new File(loc.getParentFile(), "KootPanKing.exe");
-                    EXE_PATH = exeCandidate.exists()
-					? exeCandidate.getAbsolutePath() : loc.getAbsolutePath();
-					} else {
-                    File exeCandidate = new File(loc, "KootPanKing.exe");
-                    if (exeCandidate.exists()) EXE_PATH = exeCandidate.getAbsolutePath();
-				}
-                System.out.println("[AppDir] CodeSource 감지: " + EXE_PATH);
-			} catch (Exception ignored) {}
-		}
-        // ③ ProcessHandle 보완
+                java.security.CodeSource cs =
+                    KootPanKing.class.getProtectionDomain().getCodeSource();
+                if (cs != null) {
+                    File loc = new File(cs.getLocation().toURI()).getAbsoluteFile();
+                    String locName = loc.getName().toLowerCase();
+                    if (locName.equals("java.exe") || locName.equals("javaw.exe")
+                     || locName.equals("java")     || locName.equals("javaw")) {
+                        // javaw.exe → 건너뜀, ③ ProcessHandle 에서 처리
+                    } else if (loc.isDirectory()) {
+                        File exeCandidate = new File(loc, "KootPanKing.exe");
+                        if (exeCandidate.exists()) {
+                            EXE_PATH = exeCandidate.getAbsolutePath();
+                            System.out.println("[AppDir] CodeSource(dir) EXE 감지: " + EXE_PATH);
+                        }
+                        // exe 없으면 ③ ProcessHandle 에서 처리
+                    } else if (locName.endsWith(".jar")) {
+                        File exeCandidate = new File(loc.getParentFile(), "KootPanKing.exe");
+                        if (exeCandidate.exists()) {
+                            EXE_PATH = exeCandidate.getAbsolutePath();
+                        } else {
+                            EXE_PATH = loc.getAbsolutePath();
+                        }
+                        System.out.println("[AppDir] CodeSource(jar) 감지: " + EXE_PATH);
+                    } else {
+                        EXE_PATH = loc.getAbsolutePath();
+                        System.out.println("[AppDir] CodeSource 감지: " + EXE_PATH);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        // ③ ProcessHandle 보완 — 최후 수단 (javaw.exe 제외)
         if (EXE_PATH.isEmpty()) {
             try {
                 java.util.Optional<String> cmd = ProcessHandle.current().info().command();
@@ -86,10 +108,10 @@ public class KootPanKing extends JFrame {
                         && !name.equals("java")     && !name.equals("javaw")) {
                         EXE_PATH = f.getAbsolutePath();
                         System.out.println("[AppDir] ProcessHandle 감지: " + EXE_PATH);
-					}
-				}
-			} catch (Exception ignored) {}
-		}
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
 
         // ── 데이터 폴더는 항상 %APPDATA%\KootPanKing\ 고정 ──
         // 실행파일(exe/jar) 위치와 무관하게 데이터는 APPDATA 에만 저장
@@ -2810,6 +2832,12 @@ public class KootPanKing extends JFrame {
             javax.swing.SwingUtilities.invokeLater(() ->
                 gmail.sendShutdownNotice(() -> { AppLogger.close(); System.exit(0); })
 			);
+            // ③ 안전장치: 10초 후에도 exit 안 됐으면 강제 종료
+            //    (tg/gmail 네트워크 hang 으로 System.exit() 가 호출되지 않는 경우 대비)
+            try { Thread.sleep(10_000); } catch (InterruptedException ignored) {}
+            System.out.println("[Shutdown] 10초 타임아웃 — 강제 종료");
+            AppLogger.close();
+            System.exit(0);
 		}, "ShutdownSequence").start();
 	}
 
