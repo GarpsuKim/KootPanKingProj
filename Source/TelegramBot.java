@@ -1294,16 +1294,16 @@ public class TelegramBot {
         catch (Exception e) { throw new RuntimeException(e); }
 	}
 
-    // ── 텔레그램 보내기 다이얼로그 ───────────────────────────────
+    // ── 텔레그램 설정 다이얼로그 ───────────────────────────────
     /**
-     * 텔레그램 보내기 다이얼로그를 표시합니다.
+     * 텔레그램 설정 다이얼로그를 표시합니다.
      * EDT(Event Dispatch Thread)에서 호출해야 합니다.
      *
      * @param owner 부모 Window (JFrame 등)
      */
     public void showTelegramDialog(java.awt.Window owner) {
         JDialog dlg = new JDialog(owner instanceof java.awt.Frame ? (java.awt.Frame) owner
-                : null, "✈️ 텔레그램 보내기", false);
+                : null, "✈️ 텔레그램 설정", false);
         dlg.setLayout(new BorderLayout(8, 8));
         dlg.getRootPane().setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
 

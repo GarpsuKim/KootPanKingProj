@@ -345,11 +345,11 @@ public class SuperDir extends JFrame {
 		*    실제 뷰어는 SplashWindow.showTextWindow() 가 담당.
 		*    SuperDir 단독 실행 시에만 동작.
 	*/
-    /** 자체 간이 텍스트 뷰어 (SplashWindow 연동 불가 시) — TextFileReader 로 인코딩 자동 탐지 */
+    /** 자체 간이 텍스트 뷰어 (SplashWindow 연동 불가 시) — SplashWindow.TextFileReader 로 인코딩 자동 탐지 */
     private void openSimpleViewer(File file) {
         new Thread(() -> {
             try {
-                TextFileReader.Result r = TextFileReader.read(file);   // 인코딩 자동 탐지
+                SplashWindow.TextFileReader.Result r = SplashWindow.TextFileReader.read(file);   // 인코딩 자동 탐지
                 SwingUtilities.invokeLater(() -> {
                     JFrame sub = new JFrame("📄 " + file.getName());
                     sub.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);

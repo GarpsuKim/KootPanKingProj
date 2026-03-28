@@ -172,6 +172,9 @@ public class MenuBuilder {
         String  getKakaoAccessToken();
         void    kakaoLogin();
         void    kakaoSend(String title, String msg);
+        String  getKakaoApiKey();
+        String  getKakaoClientSecret();
+        void    setKakaoCredentials(String apiKey, String clientSecret);
         void    showKakaoGuide();
         void    prepareMessageBox();      // JOptionPane 위치 조정
         void    prepareDialog(java.awt.Window dlg); // 다이얼로그 중앙 + 시계 우상단
@@ -181,6 +184,8 @@ public class MenuBuilder {
         TelegramBot           getTgForCalendar();    // 텔레그램 봇 (캘린더 전송용)
         // ── Naver Calendar ────────────────────────────────────────
         NaverCalendarService  getNaverCalendarService(); // null 이면 미설정
+        void setNaverCredentials(String id, String pass); // naverCalendarService 필드 직접 할당 후 saveConfig()
+
 		
         // ── Log / Config ──────────────────────────────────────────
         String  getLogFilePath();         // 현재 로그 파일 경로
@@ -583,7 +588,7 @@ public class MenuBuilder {
     // ── 텔레그램 ─────────────────────────────────────────────────
     private JMenu buildTelegramMenu() {
         JMenu telegramMenu = new JMenu("텔레그램");
-        JMenuItem telegramSendItem = new JMenuItem("✈️ 텔레그램 보내기...");
+        JMenuItem telegramSendItem = new JMenuItem("✈️ 텔레그램 설정...");
         telegramSendItem.addActionListener(e -> host.showTelegramDialog());
         telegramMenu.add(telegramSendItem);
         JMenuItem telegramHelpItem = new JMenuItem("📖 텔레그램 설정 안내...");
@@ -951,7 +956,7 @@ public class MenuBuilder {
                 java.net.URL dlUrl = java.net.URI.create(
 				"https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/INI_bak/youTubeCctv.ini").toURL();
                 java.nio.file.Path dest = java.nio.file.Paths.get(
-					new java.io.File(host.getConfigFilePath()).getParent(), "youTubeCctv.ini");
+				new java.io.File(host.getConfigFilePath()).getParent(), "youTubeCctv.ini");
                 try (java.io.InputStream in = dlUrl.openStream()) {
                     java.nio.file.Files.copy(in, dest,
 					java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -994,23 +999,23 @@ public class MenuBuilder {
 	*/
     private java.util.List<String[]> loadStreamIni() {
         java.util.List<String[]> list = new java.util.ArrayList<>();
-
+		
         // settings/ 폴더 기준 — CONFIG_FILE 과 같은 폴더 (항상 APPDATA\KootPanKing\settings\)
         java.io.File appDir  = new java.io.File(host.getConfigFilePath()).getParentFile();
         if (appDir == null) {
             String ad = System.getenv("APPDATA");
             if (ad == null) ad = System.getProperty("user.home");
             appDir = new java.io.File(ad + java.io.File.separator
-                + "KootPanKing" + java.io.File.separator + "settings");
-        }
+			+ "KootPanKing" + java.io.File.separator + "settings");
+		}
         java.io.File iniFile = new java.io.File(appDir, "youTubeCctv.ini");
         System.out.println("[StreamIni] 탐색 경로: " + iniFile.getAbsolutePath());
-
+		
         // 파일 없으면 GitHub 에서 다운로드
         if (!iniFile.exists()) {
             System.out.println("[StreamIni] 파일 없음 → GitHub 다운로드 시도");
             downloadStreamIni(iniFile);
-        }
+		}
 		
         if (!iniFile.exists()) {
             System.out.println("[StreamIni] 다운로드 실패 — 목록 없음");
@@ -1682,8 +1687,78 @@ public class MenuBuilder {
 		? "🔑 카카오 로그인..." : "✅ 카카오 로그인됨";
         JMenuItem kakaoLoginItem = new JMenuItem(kakaoLoginStatus);
         kakaoLoginItem.addActionListener(e -> {
-            host.prepareMessageBox();
-            host.kakaoLogin();
+            // 카카오 로그인 다이얼로그
+            JDialog dlg = new JDialog((java.awt.Frame) null,
+			"🔑 카카오 로그인", true);
+            dlg.setLayout(new BorderLayout(8, 8));
+            dlg.getRootPane().setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+			
+            JPanel cfgPanel = new JPanel(new GridBagLayout());
+            cfgPanel.setBorder(BorderFactory.createTitledBorder("카카오 앱 설정"));
+            GridBagConstraints cg = new GridBagConstraints();
+            cg.insets = new Insets(4, 4, 4, 4); cg.anchor = GridBagConstraints.WEST;
+			
+            cg.gridx = 0; cg.gridy = 0;
+            cfgPanel.add(new JLabel("REST API 키:"), cg);
+            JTextField apiKeyField = new JTextField(host.getKakaoApiKey(), 28);
+            cg.gridx = 1; cg.fill = GridBagConstraints.HORIZONTAL; cg.weightx = 1;
+            cfgPanel.add(apiKeyField, cg);
+			
+            cg.gridx = 0; cg.gridy = 1; cg.fill = GridBagConstraints.NONE; cg.weightx = 0;
+            cfgPanel.add(new JLabel("Client Secret:"), cg);
+            JTextField secretField = new JTextField(host.getKakaoClientSecret(), 28);
+            cg.gridx = 1; cg.fill = GridBagConstraints.HORIZONTAL; cg.weightx = 1;
+            cfgPanel.add(secretField, cg);
+			
+            cg.gridx = 0; cg.gridy = 2; cg.gridwidth = 2; cg.fill = GridBagConstraints.NONE; cg.weightx = 0;
+            cfgPanel.add(new JLabel(
+                "<html><font color=gray size=-1>"
+                + "※ developers.kakao.com → 내 애플리케이션 → 앱 키 → REST API 키<br>"
+                + "※ Client Secret: 보안 → Client Secret → 코드 복사"
+			+ "</font></html>"), cg);
+            cg.gridwidth = 1;
+			
+            JLabel statusLabel = new JLabel(
+			host.getKakaoAccessToken().isEmpty() ? "❌ 미로그인" : "✅ 로그인됨");
+            cg.gridx = 0; cg.gridy = 3; cg.gridwidth = 2;
+            cfgPanel.add(statusLabel, cg);
+            cg.gridwidth = 1;
+			
+            JButton loginBtn = new JButton("🔑 카카오 로그인");
+            loginBtn.setBackground(new Color(255, 220, 0));
+            loginBtn.setForeground(Color.BLACK);
+            loginBtn.setOpaque(true);
+            loginBtn.setBorderPainted(false);
+            loginBtn.addActionListener(ev -> {
+                String apiKey = apiKeyField.getText().trim();
+                String secret = secretField.getText().trim();
+                if (apiKey.isEmpty() || secret.isEmpty()) {
+                    JOptionPane.showMessageDialog(dlg,
+					"REST API 키와 Client Secret을 입력하세요.", "카카오 로그인", JOptionPane.WARNING_MESSAGE);
+                    return;
+				}
+                host.setKakaoCredentials(apiKey, secret);
+                host.prepareMessageBox();
+                host.kakaoLogin();
+                new javax.swing.Timer(3000, tev -> {
+                    statusLabel.setText(host.getKakaoAccessToken().isEmpty() ? "❌ 미로그인" : "✅ 로그인됨");
+                    ((javax.swing.Timer) tev.getSource()).stop();
+				}).start();
+			});
+			
+            JButton closeBtn2 = new JButton("닫기");
+            closeBtn2.addActionListener(ev -> dlg.dispose());
+			
+            JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+            south.add(loginBtn); south.add(closeBtn2);
+			
+            dlg.add(cfgPanel, BorderLayout.CENTER);
+            dlg.add(south,    BorderLayout.SOUTH);
+            // dlg.pack();
+            // dlg.setLocationRelativeTo(host.getOwnerComponent());
+            host.prepareDialog(dlg);
+            dlg.setAlwaysOnTop(true);
+			dlg.setVisible(true);
 		});
         kakaoMenu.add(kakaoLoginItem);
         kakaoMenu.addSeparator();
@@ -1753,6 +1828,11 @@ public class MenuBuilder {
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 향후 7일 조회",   "next7"));
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 한달 일정 조회",  "month"));
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 지난 7일 조회",   "past7"));
+
+        menu.addSeparator();
+
+        // ⑮ 네이버 칼렌다 설정
+        menu.add(buildNaverCaldavSettingsItem());
 		
         return menu;
 	}
@@ -1843,6 +1923,79 @@ public class MenuBuilder {
 	}
 	
     /** 네이버 일정 조회 메뉴 항목 생성 */
+    /** 네이버 칼렌다 설정 메뉴 항목 */
+    private JMenuItem buildNaverCaldavSettingsItem() {
+        JMenuItem item = new JMenuItem("⚙️ 네이버 칼렌다 설정");
+        item.addActionListener(e -> {
+            // 현재 naverCalendarService 필드에서 직접 읽어 UI 초기값으로 사용 (gmail.from/pass 방식과 동일)
+            NaverCalendarService naver = host.getNaverCalendarService();
+            String curId   = (naver != null) ? naver.naverId       : "";
+            String curPass = (naver != null) ? naver.naverPassword : "";
+
+            JDialog dlg = new JDialog(
+                host.getOwnerComponent() instanceof java.awt.Frame
+                    ? (java.awt.Frame) host.getOwnerComponent() : null,
+                "⚙️ 네이버 칼렌다 설정", true);
+            dlg.setLayout(new BorderLayout(8, 8));
+            dlg.getRootPane().setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+
+            JPanel cfgPanel = new JPanel(new GridBagLayout());
+            cfgPanel.setBorder(BorderFactory.createTitledBorder("네이버 CalDAV 설정"));
+            GridBagConstraints cg = new GridBagConstraints();
+            cg.insets = new Insets(4, 4, 4, 4);
+            cg.anchor = GridBagConstraints.WEST;
+
+            // 행 0 : 네이버 사용자 ID
+            cg.gridx = 0; cg.gridy = 0; cg.fill = GridBagConstraints.NONE; cg.weightx = 0;
+            cfgPanel.add(new JLabel("네이버 사용자 ID:"), cg);
+            JTextField idField = new JTextField(curId, 24);
+            cg.gridx = 1; cg.fill = GridBagConstraints.HORIZONTAL; cg.weightx = 1;
+            cfgPanel.add(idField, cg);
+
+            // 행 1 : 네이버 칼렌다 비밀번호
+            cg.gridx = 0; cg.gridy = 1; cg.fill = GridBagConstraints.NONE; cg.weightx = 0;
+            cfgPanel.add(new JLabel("네이버 칼렌다 비밀번호:"), cg);
+            JTextField pwField = new JTextField(curPass, 24);
+            cg.gridx = 1; cg.fill = GridBagConstraints.HORIZONTAL; cg.weightx = 1;
+            cfgPanel.add(pwField, cg);
+
+            // 행 2 : 안내문
+            cg.gridx = 0; cg.gridy = 2; cg.gridwidth = 2;
+            cg.fill = GridBagConstraints.NONE; cg.weightx = 0;
+            cfgPanel.add(new JLabel(
+                "<html><font color=gray size=-1>"
+                + "※ 비밀번호: 네이버 → 설정 → 보안 → 외부 캘린더 비밀번호"
+                + "</font></html>"), cg);
+            cg.gridwidth = 1;
+
+            // 버튼
+            JButton okBtn     = new JButton("확인");
+            JButton cancelBtn = new JButton("취소");
+            okBtn.setPreferredSize(new Dimension(80, 26));
+            cancelBtn.setPreferredSize(new Dimension(80, 26));
+
+            okBtn.addActionListener(ev -> {
+                String newId   = idField.getText().trim();
+                String newPass = pwField.getText().trim();
+                host.setNaverCredentials(newId, newPass); // naverCalendarService 필드 직접 할당 + saveConfig()
+                dlg.dispose();
+            });
+            cancelBtn.addActionListener(ev -> dlg.dispose());
+
+            JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+            south.add(okBtn);
+            south.add(cancelBtn);
+
+            dlg.add(cfgPanel, BorderLayout.CENTER);
+            dlg.add(south,    BorderLayout.SOUTH);
+            host.prepareDialog(dlg);
+            dlg.setAlwaysOnTop(true);
+            dlg.setVisible(true);
+        });
+        return item;
+    }
+
+    /** 네이버 일정 조회 메뉴 항목 생성 공통 메서드 */
     private JMenuItem buildNaverCalendarQueryItem(String label, String mode) {
         JMenuItem item = new JMenuItem(label);
         item.addActionListener(e -> {
@@ -1958,12 +2111,6 @@ public class MenuBuilder {
         JMenuItem sendGmailItem = new JMenuItem("📧 지금 Gmail 보내기");
         sendGmailItem.addActionListener(e -> {
             GmailSender gmail = host.getGmail();
-            if (gmail.from.isEmpty() || gmail.pass.isEmpty()) {
-                JOptionPane.showMessageDialog(host.getOwnerComponent(),
-					"Gmail 주소와 앱 비밀번호를 먼저 입력하세요.", "Gmail 보내기",
-				JOptionPane.WARNING_MESSAGE);
-                return;
-			}
 			
             // 입력 서브 다이얼로그
             JPanel ip = new JPanel(new GridBagLayout());
@@ -1972,19 +2119,31 @@ public class MenuBuilder {
             ig.anchor = GridBagConstraints.WEST;
 			
             ig.gridx = 0; ig.gridy = 0;
+            ip.add(new JLabel("발신자 Gmail주소:"), ig);
+            JTextField fromField = new JTextField(gmail.from, 24);
+            ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
+            ip.add(fromField, ig);
+			
+            ig.gridx = 0; ig.gridy = 1; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ip.add(new JLabel("발신자 앱비밀번호:"), ig);
+            JPasswordField passField = new JPasswordField(gmail.pass, 24);
+            ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
+            ip.add(passField, ig);
+			
+            ig.gridx = 0; ig.gridy = 2; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
             ip.add(new JLabel("수신자 이메일:"), ig);
             JTextField toField = new JTextField(20);
             toField.setText(!gmail.lastTo.isEmpty() ? gmail.lastTo : gmail.from);
             ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
             ip.add(toField, ig);
 			
-            ig.gridx = 0; ig.gridy = 1; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ig.gridx = 0; ig.gridy = 3; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
             ip.add(new JLabel("제목:"), ig);
             JTextField subjField = new JTextField("[끝판왕] 알림", 20);
             ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
             ip.add(subjField, ig);
 			
-            ig.gridx = 0; ig.gridy = 2; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ig.gridx = 0; ig.gridy = 4; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
             ip.add(new JLabel("내용:"), ig);
             JTextArea bodyArea = new JTextArea(4, 20);
             bodyArea.setLineWrap(true);
@@ -1998,12 +2157,22 @@ public class MenuBuilder {
 				JOptionPane.OK_CANCEL_OPTION,
 			JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
 			
+            String fromAddr = fromField.getText().trim();
+            String passStr  = new String(passField.getPassword()).trim();
+            if (fromAddr.isEmpty() || passStr.isEmpty()) {
+                JOptionPane.showMessageDialog(host.getOwnerComponent(),
+				"발신자 Gmail주소와 앱비밀번호를 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
+                return;
+			}
             String toAddr = toField.getText().trim();
             if (toAddr.isEmpty()) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(),
 				"수신자 이메일을 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
                 return;
 			}
+			
+            gmail.from = fromAddr;
+            gmail.pass = passStr;
 			
             sendGmailItem.setEnabled(false);
             final String subj = subjField.getText().trim();
@@ -2013,18 +2182,19 @@ public class MenuBuilder {
                 try {
                     gmail.send(toAddr, subj, body);
                     SwingUtilities.invokeLater(() -> {
+                        host.saveConfig();
                         sendGmailItem.setEnabled(true);
                         JOptionPane.showMessageDialog(host.getOwnerComponent(),
-							"✅ Gmail 전송 완료!\n수신자: " + toAddr,
+                            "✅ Gmail 전송 완료!\n수신자: " + toAddr,
 						"Gmail 보내기", JOptionPane.INFORMATION_MESSAGE);
 					});
 					} catch (Exception ex) {
                     SwingUtilities.invokeLater(() -> {
                         sendGmailItem.setEnabled(true);
                         JOptionPane.showMessageDialog(host.getOwnerComponent(),
-							"❌ 전송 실패: " + ex.getMessage()
-							+ "\n\n확인사항:\n1. Gmail 앱 비밀번호 확인"
-							+ "\n2. Gmail → 구글 계정 → 보안 → 앱 비밀번호",
+                            "❌ 전송 실패: " + ex.getMessage()
+                            + "\n\n확인사항:\n1. Gmail 앱 비밀번호 확인"
+                            + "\n2. Gmail → 구글 계정 → 보안 → 앱 비밀번호",
 						"Gmail 오류", JOptionPane.ERROR_MESSAGE);
 					});
 				}
@@ -2078,6 +2248,12 @@ public class MenuBuilder {
         @Override public GoogleCalendarService getCalendarService() { return app.calendarService; }
         @Override public TelegramBot getTgForCalendar()             { return app.tg; }
         @Override public NaverCalendarService getNaverCalendarService() { return app.naverCalendarService; }
+        @Override public void setNaverCredentials(String id, String pass) {
+            if (app.naverCalendarService == null) app.naverCalendarService = new NaverCalendarService();
+            app.naverCalendarService.naverId       = id   != null ? id.trim()   : "";
+            app.naverCalendarService.naverPassword = pass != null ? pass.trim() : "";
+            app.saveConfig();
+        }
 		
         // ── 상태 쓰기 ───────────────────────────────────────
         @Override public void setAlwaysOnTop(boolean v)  { app.alwaysOnTop=v; app.setAlwaysOnTop(v); }
@@ -2172,8 +2348,7 @@ public class MenuBuilder {
             KootPanKing.instanceCount--;
             if (KootPanKing.instanceCount <= 0) {
                 if (app.shutdownGuard != null) app.shutdownGuard.cancel();
-                app.tg.sendShutdownNotice();
-                app.gmail.sendShutdownNotice(() -> { AppLogger.close(); System.exit(0); });
+                app.sendShutdownEmailAndExit(); // tg 동기 → gmail → exit 순서 보장
 			}
 		}
         @Override public void confirmClose() { app.confirmClose(); }
@@ -2185,8 +2360,7 @@ public class MenuBuilder {
 			}
             if (app.shutdownGuard != null) app.shutdownGuard.cancel();
             app.saveConfig();
-            app.tg.sendShutdownNotice();
-            app.gmail.sendShutdownNotice(() -> { AppLogger.close(); System.exit(0); });
+            app.sendShutdownEmailAndExit(); // tg 동기 → gmail → exit 순서 보장
 		}
         @Override public void confirmAndExit() { app.confirmAndExit(); }
 		
@@ -2250,6 +2424,15 @@ public class MenuBuilder {
         @Override public String  getKakaoAccessToken()          { return app.kakao.kakaoAccessToken; }
         @Override public void    kakaoLogin()                   { if (!app.isChild) app.kakao.kakaoLogin(); }
         @Override public void    kakaoSend(String title, String msg) { if (!app.isChild) app.kakao.sendKakao(title, msg); }
+        @Override public String  getKakaoApiKey()               { return app.kakao.kakaoRestApiKey; }
+        @Override public String  getKakaoClientSecret()         { return app.kakao.kakaoClientSecret; }
+        @Override public void    setKakaoCredentials(String apiKey, String clientSecret) {
+            if (!app.isChild) {
+                app.kakao.kakaoRestApiKey   = apiKey;
+                app.kakao.kakaoClientSecret = clientSecret;
+                app.saveConfig();
+			}
+		}
         @Override public void    showKakaoGuide()               { if (!app.isChild) app.kakao.showKakaoGuide(); }
         @Override public void    prepareMessageBox()            { app.prepareMessageBox(); }
         @Override public void    prepareDialog(java.awt.Window dlg) { app.prepareDialog(dlg); }
@@ -2269,7 +2452,7 @@ public class MenuBuilder {
 	}
     public JMenu buildTelegramMenuPublic() {
         JMenu m = new JMenu("텔레그램");
-        JMenuItem s = new JMenuItem("✈️ 텔레그램 보내기...");
+        JMenuItem s = new JMenuItem("✈️ 텔레그램 설정...");
         s.addActionListener(e -> host.showTelegramDialog());
         m.add(s);
         JMenuItem h = new JMenuItem("📖 텔레그램 설정 안내...");
@@ -2355,7 +2538,7 @@ public class MenuBuilder {
         if (appData == null) appData = System.getProperty("user.home");
         java.io.File dataDir = new java.io.File(appData
             + java.io.File.separator + "KootPanKing"
-            + java.io.File.separator + "data");
+		+ java.io.File.separator + "data");
         if (!dataDir.exists()) dataDir.mkdirs();
         return new java.io.File(dataDir, "calendar.html");
 	}

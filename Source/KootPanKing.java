@@ -942,23 +942,27 @@ public class KootPanKing extends JFrame {
         //    GoogleCalendarService 는 SETTINGS_DIR 을 직접 받아 파일명만 붙인다.
         calendarService = new GoogleCalendarService();
         calendarService.setAppDir(SETTINGS_DIR);  // ★ APP_DIR 대신 SETTINGS_DIR 주입 — credentials/token 은 settings\ 폴더에 있음
-        if (parent == null && calendarService.credentialsExist()) {
+        // ── 캘린더 초기화 및 폴러 시작 (구글/네이버 완전 독립) ──
+        tg.naverCalendarService = naverCalendarService;
+        if (parent == null) {
             new Thread(() -> {
-                if (calendarService.init()) {
-                    tg.calendarService = calendarService;
-                    tg.kakao           = kakao;
-
-                    // ── 네이버 CalDAV 초기화 ──────────────────────
-                    String naverId   = config.getProperty("naver.caldav.id",       "");
-                    String naverPass = config.getProperty("naver.caldav.password", "");
-                    if (NaverCalendarService.credentialsExist(naverId, naverPass)) {
-                        if (naverCalendarService == null) naverCalendarService = new NaverCalendarService();
-                        naverCalendarService.setCredentials(naverId, naverPass);
-                        naverCalendarService.init();
-					}
-                    // 텔레그램에 네이버 서비스 주입
-                    tg.naverCalendarService = naverCalendarService;
-
+                // 구글 - credentials 있을 때만
+                boolean googleOk = false;
+                if (calendarService.credentialsExist()) {
+                    googleOk = calendarService.init();
+                    if (googleOk) {
+                        tg.calendarService = calendarService;
+                        tg.kakao           = kakao;
+                    }
+                }
+                // 네이버 - 구글과 무관하게 독립 init
+                if (naverCalendarService != null
+                        && NaverCalendarService.credentialsExist(
+                            naverCalendarService.naverId, naverCalendarService.naverPassword)) {
+                    naverCalendarService.init();
+                }
+                // 폴러 - 구글 또는 네이버 중 하나라도 있으면 시작
+                if (googleOk || naverCalendarService != null) {
                     calendarPoller = new CalendarAlarmPoller(
                         calendarService,
                         naverCalendarService,  // ★ 네이버 추가 (null 이면 구글만 폴링)
@@ -1072,7 +1076,7 @@ public class KootPanKing extends JFrame {
 							calendarPoller.start();
 							calendarPoller.sendStartupBrief();
 						});
-						System.out.println("[Main] Google Calendar 연동 완료");
+						System.out.println("[Main] 캘린더 폴러 시작 완료");
 				}
 			}, "CalendarInit").start();
 		}
@@ -1606,7 +1610,7 @@ public class KootPanKing extends JFrame {
                     String streamUrl;
                     if (isYoutube) {
                         // ── YouTube: yt-dlp 로 실제 스트림 URL 추출 ──────
-                        String ytdlpPath = resolveExe("yt-dlp.exe");
+                        String ytdlpPath = AppRestarter.ToolManager.resolveExe(APP_DIR, "yt-dlp.exe");
                         ProcessBuilder ytPb = new ProcessBuilder(
                             ytdlpPath,
                             "-f", "bestvideo[ext=mp4]/bestvideo/best",
@@ -1638,7 +1642,7 @@ public class KootPanKing extends JFrame {
 					}
 
                     // ── ② 5초마다 jpg 1장씩 캡처 ────────────────────────
-                    String ffmpegPath = resolveExe("ffmpeg.exe");
+                    String ffmpegPath = AppRestarter.ToolManager.resolveExe(APP_DIR, "ffmpeg.exe");
                     final String thisUrl = youtubeUrl;
                     long startMs = System.currentTimeMillis();
                     long maxMs   = 6L * 3600 * 1000;
@@ -1726,33 +1730,6 @@ public class KootPanKing extends JFrame {
         if (clockPanel != null) clockPanel.repaint();
 	}
     /** 실행 파일 경로 탐색: APP_DIR → PATH */
-    private String resolveExe(String exeName) {
-        // tools\ 폴더 (APP_DIR 직속, log\ 와 형제)
-        File t = new File(APP_DIR + "tools", exeName);
-        if (t.exists()) return t.getAbsolutePath();
-        // ③ PATH
-        String path = System.getenv("PATH");
-        if (path != null) {
-            for (String dir : path.split(File.pathSeparator)) {
-                File candidate = new File(dir, exeName);
-                if (candidate.exists()) return candidate.getAbsolutePath();
-			}
-		}
-        return exeName;
-	}
-    /** 실행 파일 경로 탐색: APP_DIR → PATH */
-    private String resolveExe___(String exeName) {
-        File f = new File(APP_DIR + "tools", exeName);
-        if (f.exists()) return f.getAbsolutePath();
-        String path = System.getenv("PATH");
-        if (path != null) {
-            for (String dir : path.split(File.pathSeparator)) {
-                File candidate = new File(dir, exeName);
-                if (candidate.exists()) return candidate.getAbsolutePath();
-			}
-		}
-        return exeName;
-	}
 
     /**
 		* Windows 바탕화면 단색 배경색 반환.
@@ -2160,8 +2137,8 @@ public class KootPanKing extends JFrame {
 			trayKakaoItem.setEnabled(false);   // ← 이 줄 추가
             trayPopup.add(trayKakaoItem);
 
-            // 텔레그램 보내기
-            MenuItem trayTelegramItem = new MenuItem("✈️ 텔레그램 보내기...");
+            // 텔레그램 설정
+            MenuItem trayTelegramItem = new MenuItem("✈️ 텔레그램 설정...");
             trayTelegramItem.addActionListener(e -> showTelegramDialog());
 			trayTelegramItem.setEnabled(false);   // ← 추가
             trayPopup.add(trayTelegramItem);
@@ -2475,8 +2452,9 @@ public class KootPanKing extends JFrame {
                 String _navPass = config.getProperty("naver.caldav.password", "");
                 if (!_navId.isEmpty() && !_navPass.isEmpty()) {
                     if (naverCalendarService == null) naverCalendarService = new NaverCalendarService();
-                    naverCalendarService.setCredentials(_navId, _navPass);
-				}
+                    naverCalendarService.naverId       = _navId;
+                    naverCalendarService.naverPassword = _navPass;
+                }
                 if (appRestarter != null) appRestarter.setCachedPaths(
                     config.getProperty("app.exePath",   ""),
                     config.getProperty("app.javawPath", ""),
@@ -2644,11 +2622,11 @@ public class KootPanKing extends JFrame {
             config.setProperty("tg.botToken",  tg.botToken);
             config.setProperty("tg.myChatId",  tg.myChatId);
             config.setProperty("tg.polling",   String.valueOf(tg.polling));
-            // 네이버 CalDAV: 값이 없어도 항목은 항상 유지
+            // 네이버 CalDAV (gmail.from/pass 방식과 동일하게 객체 필드에서 직접 저장)
             config.setProperty("naver.caldav.id",
-			config.getProperty("naver.caldav.id",       ""));
+                naverCalendarService != null ? naverCalendarService.naverId       : "");
             config.setProperty("naver.caldav.password",
-			config.getProperty("naver.caldav.password", ""));
+                naverCalendarService != null ? naverCalendarService.naverPassword : "");
             if (!appRestarter.getCachedJavawPath().isEmpty()) config.setProperty("app.javawPath", appRestarter.getCachedJavawPath());
             if (!appRestarter.getCachedJsaPath().isEmpty())   config.setProperty("app.jsaPath",   appRestarter.getCachedJsaPath());
             config.setProperty("camera.url",      cameraUrl);
@@ -2857,7 +2835,7 @@ public class KootPanKing extends JFrame {
 			}
 			System.out.println("[ " + thisProgramName + " ] [main] start");
 			AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 시작");
-			ToolManager.init(APP_DIR); // ★ yt-dlp / ffmpeg 준비 (백그라운드)
+			AppRestarter.ToolManager.init(APP_DIR); // ★ yt-dlp / ffmpeg 준비 (백그라운드)
 
 			System.out.println("[DEBUG] sun.java.command=" + System.getProperty("sun.java.command"));
 			System.out.println("[DEBUG] user.dir=" + System.getProperty("user.dir"));

@@ -599,4 +599,182 @@ public class AppRestarter {
             catch (Exception e) { return "(unknown)"; }
         }
     }
+    // ═══════════════════════════════════════════════════════════
+    //  ToolManager (내부 static 클래스)
+    //  yt-dlp / ffmpeg 자동 다운로드 및 경로 탐색
+    //  외부 참조: AppRestarter.ToolManager.init(appDir)
+    //             AppRestarter.ToolManager.resolveExe(appDir, exeName)
+    // ═══════════════════════════════════════════════════════════
+    public static class ToolManager {
+
+        // =========================
+        // 진입점 — 반드시 백그라운드 스레드에서 호출
+        // =========================
+        public static void init(String appDir) {
+            String toolsDir = toolsDir(appDir);
+            new Thread(() -> {
+                try {
+                    java.nio.file.Files.createDirectories(java.nio.file.Paths.get(toolsDir));
+                    ensureYtDlp(toolsDir);
+                    ensureFfmpeg(toolsDir);
+                    System.out.println("[ToolManager] 초기화 완료");
+                } catch (Exception e) {
+                    System.err.println("[ToolManager] 초기화 실패: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }, "ToolManager-Init").start();
+        }
+
+        /**
+         * exe 경로 탐색: appDir/tools/ → PATH 순.
+         * KootPanKing.resolveExe() 를 대체.
+         */
+        public static String resolveExe(String appDir, String exeName) {
+            java.io.File t = new java.io.File(toolsDir(appDir), exeName);
+            if (t.exists()) return t.getAbsolutePath();
+            String path = System.getenv("PATH");
+            if (path != null) {
+                for (String dir : path.split(java.io.File.pathSeparator)) {
+                    java.io.File c = new java.io.File(dir, exeName);
+                    if (c.exists()) return c.getAbsolutePath();
+                }
+            }
+            return exeName;
+        }
+
+        private static String toolsDir(String appDir) {
+            return appDir + "tools";
+        }
+
+        // =========================
+        // yt-dlp 다운로드
+        // =========================
+        private static void ensureYtDlp(String toolsDir) throws Exception {
+            java.nio.file.Path exe = java.nio.file.Paths.get(toolsDir, "yt-dlp.exe");
+            if (java.nio.file.Files.exists(exe)) {
+                System.out.println("[ToolManager] yt-dlp 이미 존재");
+                return;
+            }
+            System.out.println("[ToolManager] yt-dlp 다운로드 중...");
+            downloadFile(
+                "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe", exe);
+            System.out.println("[ToolManager] yt-dlp 다운로드 완료");
+        }
+
+        // =========================
+        // ffmpeg 다운로드 + 추출
+        // =========================
+        private static void ensureFfmpeg(String toolsDir) throws Exception {
+            java.nio.file.Path exe = java.nio.file.Paths.get(toolsDir, "ffmpeg.exe");
+            if (java.nio.file.Files.exists(exe)) {
+                System.out.println("[ToolManager] ffmpeg 이미 존재");
+                return;
+            }
+            System.out.println("[ToolManager] ffmpeg 다운로드 중... (100MB+, 시간 소요)");
+            java.nio.file.Path zipPath = java.nio.file.Paths.get(toolsDir, "ffmpeg.zip");
+            try {
+                downloadFile(
+                    "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip", zipPath);
+                System.out.println("[ToolManager] ffmpeg 압축 해제 중...");
+                unzip(zipPath.toString(), toolsDir);
+
+                java.nio.file.Files.walk(java.nio.file.Paths.get(toolsDir))
+                    .filter(p -> p.getFileName().toString().equalsIgnoreCase("ffmpeg.exe")
+                              && !p.equals(exe))
+                    .findFirst()
+                    .ifPresent(found -> {
+                        try {
+                            java.nio.file.Files.copy(found, exe,
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                            System.out.println("[ToolManager] ffmpeg.exe 복사 완료: " + found);
+                        } catch (java.io.IOException e) { e.printStackTrace(); }
+                    });
+
+                java.nio.file.Files.walk(java.nio.file.Paths.get(toolsDir), 1)
+                    .filter(p -> !p.equals(java.nio.file.Paths.get(toolsDir))
+                              && java.nio.file.Files.isDirectory(p)
+                              && p.getFileName().toString().startsWith("ffmpeg-"))
+                    .forEach(dir -> {
+                        try {
+                            deleteRecursively(dir);
+                            System.out.println("[ToolManager] 임시 폴더 삭제: " + dir);
+                        } catch (java.io.IOException e) { e.printStackTrace(); }
+                    });
+
+                System.out.println("[ToolManager] ffmpeg 준비 완료");
+            } finally {
+                java.nio.file.Files.deleteIfExists(zipPath);
+            }
+        }
+
+        // =========================
+        // 파일 다운로드 (진행률 출력)
+        // =========================
+        private static void downloadFile(String urlStr, java.nio.file.Path target) throws Exception {
+            java.net.URLConnection conn = java.net.URI.create(urlStr).toURL().openConnection();
+            conn.setConnectTimeout(15_000);
+            conn.setReadTimeout(60_000);
+            long total = conn.getContentLengthLong();
+            try (java.io.InputStream in = conn.getInputStream()) {
+                byte[] buf = new byte[8192];
+                long downloaded = 0; int len, lastPct = -1;
+                try (java.io.OutputStream out = java.nio.file.Files.newOutputStream(target,
+                        java.nio.file.StandardOpenOption.CREATE,
+                        java.nio.file.StandardOpenOption.TRUNCATE_EXISTING)) {
+                    while ((len = in.read(buf)) > 0) {
+                        out.write(buf, 0, len);
+                        downloaded += len;
+                        if (total > 0) {
+                            int pct = (int)(downloaded * 100 / total);
+                            if (pct != lastPct && pct % 10 == 0) {
+                                System.out.printf("[ToolManager] %s ... %d%%%n",
+                                    target.getFileName(), pct);
+                                lastPct = pct;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // =========================
+        // ZIP 해제 (zip slip 방어)
+        // =========================
+        private static void unzip(String zipFile, String destDir) throws Exception {
+            java.io.File destDirFile = new java.io.File(destDir).getCanonicalFile();
+            byte[] buffer = new byte[8192];
+            try (java.util.zip.ZipInputStream zis =
+                    new java.util.zip.ZipInputStream(new java.io.FileInputStream(zipFile))) {
+                java.util.zip.ZipEntry entry;
+                while ((entry = zis.getNextEntry()) != null) {
+                    java.io.File newFile =
+                        new java.io.File(destDirFile, entry.getName()).getCanonicalFile();
+                    if (!newFile.getCanonicalPath().startsWith(
+                            destDirFile.getCanonicalPath() + java.io.File.separator))
+                        throw new SecurityException("Zip slip 차단: " + entry.getName());
+                    if (entry.isDirectory()) {
+                        newFile.mkdirs();
+                    } else {
+                        newFile.getParentFile().mkdirs();
+                        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(newFile)) {
+                            int len;
+                            while ((len = zis.read(buffer)) > 0) fos.write(buffer, 0, len);
+                        }
+                    }
+                    zis.closeEntry();
+                }
+            }
+        }
+
+        // =========================
+        // 폴더 재귀 삭제
+        // =========================
+        private static void deleteRecursively(java.nio.file.Path path) throws java.io.IOException {
+            java.nio.file.Files.walk(path)
+                .sorted(java.util.Comparator.reverseOrder())
+                .map(java.nio.file.Path::toFile)
+                .forEach(java.io.File::delete);
+        }
+    }
+
 }

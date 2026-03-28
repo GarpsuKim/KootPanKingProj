@@ -304,7 +304,7 @@ public class AlarmController {
                 a.pushService, a.pushToken, a.pushAppToken,
                 a.hour, a.minute, msg), "AlarmPush").start();
         // ④ 이메일
-        if (a.useEmail && !a.emailTo.isEmpty())
+        if (a.useEmail && !a.emailTo.isEmpty() && gmail.isConfigured())
             new Thread(() -> gmail.sendAlarm(a.emailTo, a.hour, a.minute, msg), "AlarmMail").start();
         // ⑤ 카카오톡
         if (a.useKakao && !kakao.kakaoAccessToken.isEmpty()) {
@@ -351,7 +351,7 @@ public class AlarmController {
             }
         }
         // 이메일
-        if (a.useEmail && !a.emailTo.isEmpty()) {
+        if (a.useEmail && !a.emailTo.isEmpty() && gmail.isConfigured()) {
             new Thread(() -> gmail.sendAlarm(a.emailTo, a.hour, a.minute, msg), "SendNowMail").start();
             result.append("이메일 전송 중...\n");
         }
@@ -462,21 +462,9 @@ public class AlarmController {
         GridBagConstraints gc = new GridBagConstraints();
         gc.insets = new Insets(3, 4, 3, 4); gc.anchor = GridBagConstraints.WEST;
 
-        gc.gridx = 0; gc.gridy = 0;
-        emailPanel.add(new JLabel("Gmail 주소:"), gc);
-        JTextField fromField = new JTextField(gmail.from, 22);
-        gc.gridx = 1; gc.fill = GridBagConstraints.HORIZONTAL; gc.weightx = 1;
-        emailPanel.add(fromField, gc);
-
-        gc.gridx = 0; gc.gridy = 1; gc.fill = GridBagConstraints.NONE; gc.weightx = 0;
-        emailPanel.add(new JLabel("앱 비밀번호:"), gc);
-        JPasswordField passField = new JPasswordField(gmail.pass, 22);
-        gc.gridx = 1; gc.fill = GridBagConstraints.HORIZONTAL; gc.weightx = 1;
-        emailPanel.add(passField, gc);
-
-        gc.gridx = 0; gc.gridy = 2; gc.gridwidth = 2; gc.fill = GridBagConstraints.NONE;
+        gc.gridx = 0; gc.gridy = 0; gc.gridwidth = 2; gc.fill = GridBagConstraints.NONE;
         emailPanel.add(new JLabel(
-            "<html><font color=gray size=-1>※ Gmail → 구글 계정 → 보안 → 앱 비밀번호 생성</font></html>"), gc);
+            "<html><font color=gray size=-1>※ 발신자 Gmail 계정은 팝업메뉴 → GMail캘린다 → 지금 Gmail 보내기에서 설정</font></html>"), gc);
         gc.gridwidth = 1;
 
         // ── [지금 Gmail 보내기] ────────────────────────────────
@@ -487,11 +475,9 @@ public class AlarmController {
         sendGmailBtn.setForeground(Color.WHITE);
         sendGmailBtn.setFont(new Font("Malgun Gothic", Font.BOLD, 12));
         sendGmailBtn.addActionListener(e -> {
-            gmail.from = fromField.getText().trim();
-            gmail.pass = new String(passField.getPassword()).trim();
             if (gmail.from.isEmpty() || gmail.pass.isEmpty()) {
                 JOptionPane.showMessageDialog(dlg,
-                    "Gmail 주소와 앱 비밀번호를 먼저 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
+                    "발신자 Gmail 주소와 앱 비밀번호를 먼저 설정하세요.\n(팝업메뉴 → GMail캘린다 → 지금 Gmail 보내기)", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
                 return;
             }
             JPanel ip = new JPanel(new GridBagLayout());
@@ -551,8 +537,6 @@ public class AlarmController {
 
         JButton closeBtn = new JButton("닫기");
         closeBtn.addActionListener(e -> {
-            gmail.from = fromField.getText().trim();
-            gmail.pass = new String(passField.getPassword()).trim();
             saveAlarms();
             dlg.dispose();
         });
@@ -565,41 +549,16 @@ public class AlarmController {
         GridBagConstraints kgc = new GridBagConstraints();
         kgc.insets = new Insets(3, 4, 3, 4); kgc.anchor = GridBagConstraints.WEST;
 
-        kgc.gridx = 0; kgc.gridy = 0; kakaoPanel.add(new JLabel("REST API 키:"), kgc);
-        JTextField kakaoKeyField = new JTextField(kakao.kakaoRestApiKey, 28);
-        kgc.gridx = 1; kgc.fill = GridBagConstraints.HORIZONTAL; kgc.weightx = 1;
-        kakaoPanel.add(kakaoKeyField, kgc);
-        JButton kakaoLoginBtn = new JButton("카카오 로그인");
-        kgc.gridx = 2; kgc.fill = GridBagConstraints.NONE; kgc.weightx = 0;
-        kakaoPanel.add(kakaoLoginBtn, kgc);
+        kgc.gridx = 0; kgc.gridy = 0; kgc.gridwidth = 3; kgc.fill = GridBagConstraints.NONE;
+        JLabel kakaoStatusLabel = new JLabel(kakao.kakaoAccessToken.isEmpty() ? "❌ 미로그인" : "✅ 로그인됨");
+        kakaoPanel.add(kakaoStatusLabel, kgc);
 
-        kgc.gridx = 0; kgc.gridy = 1; kakaoPanel.add(new JLabel("Client Secret:"), kgc);
-        JTextField kakaoSecretField = new JTextField(kakao.kakaoClientSecret, 28);
-        kgc.gridx = 1; kgc.fill = GridBagConstraints.HORIZONTAL; kgc.weightx = 1; kgc.gridwidth = 2;
-        kakaoPanel.add(kakaoSecretField, kgc); kgc.gridwidth = 1;
-
-        kgc.gridx = 0; kgc.gridy = 2; kgc.gridwidth = 3; kgc.fill = GridBagConstraints.NONE;
+        kgc.gridx = 0; kgc.gridy = 1; kgc.gridwidth = 3;
         kakaoPanel.add(new JLabel(
             "<html><font color=gray size=-1>" +
-            "※ developers.kakao.com → 내 애플리케이션 → 앱 키 → REST API 키<br>" +
-            "※ Client Secret: 보안 → Client Secret → 코드 복사</font></html>"), kgc);
+            "※ REST API 키 / Client Secret / 로그인:<br>" +
+            "&nbsp;&nbsp;팝업메뉴 → 카카오톡 → 카카오 로그인</font></html>"), kgc);
         kgc.gridwidth = 1;
-
-        kgc.gridx = 0; kgc.gridy = 3; kgc.gridwidth = 3;
-        JLabel kakaoStatusLabel = new JLabel(kakao.kakaoAccessToken.isEmpty() ? "❌ 미로그인" : "✅ 로그인됨");
-        kakaoPanel.add(kakaoStatusLabel, kgc); kgc.gridwidth = 1;
-
-        kakaoLoginBtn.addActionListener(e -> {
-            kakao.kakaoRestApiKey   = kakaoKeyField.getText().trim();
-            kakao.kakaoClientSecret = kakaoSecretField.getText().trim();
-            host.saveConfig();
-            host.prepareMessageBox();
-            kakao.kakaoLogin();
-            new Timer(3000, ev -> {
-                kakaoStatusLabel.setText(kakao.kakaoAccessToken.isEmpty() ? "❌ 미로그인" : "✅ 로그인됨");
-                ((Timer) ev.getSource()).stop();
-            }).start();
-        });
 
         // ── 텔레그램 설정 ──────────────────────────────────────
         JPanel tgPanel = new JPanel(new GridBagLayout());
@@ -607,20 +566,11 @@ public class AlarmController {
         GridBagConstraints tgc = new GridBagConstraints();
         tgc.insets = new Insets(3, 4, 3, 4); tgc.anchor = GridBagConstraints.WEST;
 
-        tgc.gridx = 0; tgc.gridy = 0; tgPanel.add(new JLabel("Bot Token:"), tgc);
-        JTextField tgTokenField = new JTextField(tg.botToken, 28);
-        tgc.gridx = 1; tgc.fill = GridBagConstraints.HORIZONTAL; tgc.weightx = 1;
-        tgPanel.add(tgTokenField, tgc);
-
-        tgc.gridx = 0; tgc.gridy = 1; tgc.gridwidth = 2; tgc.fill = GridBagConstraints.NONE;
+        tgc.gridx = 0; tgc.gridy = 0; tgc.gridwidth = 2; tgc.fill = GridBagConstraints.NONE;
         tgPanel.add(new JLabel(
             "<html><font color=gray size=-1>" +
-            "※ 텔레그램 @BotFather → /newbot → Bot Token 발급<br>" +
+            "※ Bot Token: 팝업메뉴 → 텔레그램 → 텔레그램 설정<br>" +
             "※ Chat ID: @userinfobot 에게 /start 전송</font></html>"), tgc);
-
-        tgTokenField.addFocusListener(new FocusAdapter() {
-            @Override public void focusLost(FocusEvent e) { tg.botToken = tgTokenField.getText().trim(); }
-        });
 
         // ── 레이아웃 조립 ──────────────────────────────────────
         JPanel center = new JPanel(new BorderLayout(4, 4));

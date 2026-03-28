@@ -33,8 +33,8 @@ public class NaverCalendarService {
     private static final String CALDAV_BASE = "https://caldav.calendar.naver.com";
     private static final int MAX_EVENTS_PER_REQUEST = 1000;
     
-    private String naverId = "";
-    private char[] naverPassword;
+    public String naverId   = "";
+    public String naverPassword = "";
     private boolean initialized = false;
     private String calendarHomeUrl = "";
     private final Set<String> processedEventKeys = Collections.newSetFromMap(
@@ -53,23 +53,20 @@ public class NaverCalendarService {
 		}
 		
 		public void setCredentials(String id, String password) {
-			this.naverId = id != null ? id.trim() : "";
-			if (this.naverPassword != null) {
-				Arrays.fill(this.naverPassword, ' ');
-			}
-			this.naverPassword = password != null ? password.trim().toCharArray() : new char[0];
+			this.naverId       = id       != null ? id.trim()       : "";
+			this.naverPassword = password != null ? password.trim() : "";
 			System.out.println("[NaverCal] 자격 증명 설정: " + naverId);
 		}
 		
 		public boolean isInitialized() { return initialized; }
-		
+
 		public static boolean credentialsExist(String id, String pass) {
 			return id != null && !id.trim().isEmpty()
             && pass != null && !pass.trim().isEmpty();
 		}
 		
 		public boolean init() {
-			if (naverId.isEmpty() || naverPassword.length == 0) {
+			if (naverId.isEmpty() || naverPassword.isEmpty()) {
 				System.out.println("[NaverCal ERROR] 초기화 실패: 자격 증명이 없음");
 				return false;
 			}
@@ -176,6 +173,7 @@ public class NaverCalendarService {
 				System.out.println("[NaverCal WARNING] 서비스가 초기화되지 않음");
 				return result;
 			}
+			processedEventKeys.clear(); // 조회마다 초기화 (누적 중복 방지)
 			
 			try {
 				List<String> calUrls = fetchCalendarUrls(calendarHomeUrl);
@@ -185,29 +183,16 @@ public class NaverCalendarService {
 				}
 				System.out.println("[NaverCal] 캘린더 " + calUrls.size() + "개 발견");
 				
-				for (String calUrl : calUrls) {
+								for (String calUrl : calUrls) {
 					if (result.size() >= MAX_EVENTS_PER_REQUEST) {
 						System.out.println("[NaverCal WARNING] 최대 이벤트 수 도달: " + MAX_EVENTS_PER_REQUEST);
 						break;
 					}
-					
 					try {
-						String propResp = caldavRequest("PROPFIND", calUrl,
-						propfindIcsBody(), "application/xml", "1");
-						if (propResp == null || propResp.isEmpty()) continue;
-						
-						List<String> icsUrls = extractIcsHrefs(propResp);
-						String calName = calUrl.replaceAll(".*/calendar/", "");
-						// System.out.println("[NaverCal] " + calName + " → .ics " + icsUrls.size() + "개");
-						
-						for (String icsUrl : icsUrls) {
+						List<String> icsTexts = fetchIcsTexts(calUrl, start, end);
+						for (String icsText : icsTexts) {
+							if (icsText == null || icsText.isEmpty()) continue;
 							try {
-								String absIcsUrl = icsUrl.startsWith("http")
-                                ? icsUrl : CALDAV_BASE + icsUrl;
-								String icsText = caldavRequest("GET", absIcsUrl,
-								null, "text/calendar", "0");
-								if (icsText == null || icsText.isEmpty()) continue;
-								
 								List<CalendarEvent> parsed = parseIcsWithIcal4j(icsText, start, end);
 								for (CalendarEvent ev : parsed) {
 									String key = ev.id + "|" + ev.startTime.toInstant().toEpochMilli();
@@ -216,16 +201,15 @@ public class NaverCalendarService {
 										if (result.size() >= MAX_EVENTS_PER_REQUEST) break;
 									}
 								}
-								} catch (Exception e) {
+							} catch (Exception e) {
 								System.out.println("[NaverCal ERROR] ICS 파싱 오류: " + e.getMessage());
 							}
 						}
-						} catch (Exception e) {
+					} catch (Exception e) {
 						System.out.println("[NaverCal ERROR] 캘린더 처리 오류: " + e.getMessage());
 					}
 				}
-				
-				result.sort((a, b) -> a.startTime.compareTo(b.startTime));
+								result.sort((a, b) -> a.startTime.compareTo(b.startTime));
 				System.out.println("[NaverCal] 총 " + result.size() + "개 일정 찾음");
 				
 				} catch (Exception e) {
@@ -240,217 +224,307 @@ public class NaverCalendarService {
 			List<CalendarEvent> result = new ArrayList<>();
 			try {
 				String cleanedIcs = icsText.replaceAll(
-				"(?s)BEGIN:VALARM.*?END:VALARM\\r?\\n?", "");
-				
+				"(?s)BEGIN:VALARM.*?END:VALARM\r?\n?", "");
+
 				CalendarBuilder builder = new CalendarBuilder();
 				Calendar cal = builder.build(new StringReader(cleanedIcs));
-				
+
+				Period<LocalDate> datePeriod = new Period<>(
+					qStart.toLocalDate(), qEnd.toLocalDate().plusDays(1)); // 종일 이벤트용
+
 				for (Object comp : cal.getComponents(Component.VEVENT)) {
 					VEvent vevent = (VEvent) comp;
 					try {
 						String uid = vevent.getUid()
 						.map(Uid::getValue)
 						.orElse(UUID.randomUUID().toString());
-						
+
 						Summary sumProp = vevent.getSummary();
 						String title = (sumProp != null) ? sumProp.getValue() : "(제목 없음)";
-						
-						// DTSTART으로 allDay 여부 확인
+
+						// DTSTART VALUE=DATE 이면 종일, 없거나 DATE-TIME 이면 시간 기반
 						boolean allDay = vevent
 						.getProperty(net.fortuna.ical4j.model.Property.DTSTART)
 						.flatMap(ds -> ds.getParameter(Parameter.VALUE))
 						.map(v -> Value.DATE.equals(v))
 						.orElse(false);
-						
+
 						if (allDay) {
-							// 종일 이벤트: LocalDate 기간으로 검색
-							Period<LocalDate> searchPeriod = new Period<>(
-							qStart.toLocalDate(), qEnd.toLocalDate());
-							Collection<Period<LocalDate>> periods = 
-							vevent.calculateRecurrenceSet(searchPeriod);
-							
+							// ── 종일 이벤트 ──────────────────────────────
+							Collection<Period<LocalDate>> periods =
+							vevent.calculateRecurrenceSet(datePeriod);
 							if (periods == null || periods.isEmpty()) continue;
-							
 							for (Period<LocalDate> p : periods) {
-								ZonedDateTime evStart = p.getStart().atStartOfDay(ZoneId.systemDefault());
-								ZonedDateTime evEnd = p.getEnd().atStartOfDay(ZoneId.systemDefault());
-								result.add(new CalendarEvent(uid, title, evStart, evEnd, true));
-							}
-							} else {
-							// 시간 기반 이벤트: Instant 기간으로 검색
-							Period<Instant> searchPeriod = new Period<>(
-							qStart.toInstant(), qEnd.toInstant());
-							Collection<Period<Instant>> periods = 
-							vevent.calculateRecurrenceSet(searchPeriod);
-							
-							if (periods == null || periods.isEmpty()) continue;
-							
-							for (Period<Instant> p : periods) {
-								ZonedDateTime evStart = p.getStart().atZone(ZoneId.systemDefault());
-								ZonedDateTime evEnd = p.getEnd().atZone(ZoneId.systemDefault());
-								result.add(new CalendarEvent(uid, title, evStart, evEnd, false));
-							}
-						}
-						} catch (Exception e) {
-						// RRULE 관련 오류는 로그만 남기고 계속 진행
-						if (e.getMessage().contains("Unsupported unit") || 
-							e.getMessage().contains("Unable to obtain")) {
-							System.out.println("[NaverCal DEBUG] 일부 일정 파싱 실패 (무시): " + e.getMessage());
-							} else {
-							System.out.println("[NaverCal ERROR] VEVENT 처리 오류: " + e.getMessage());
-						}
-					}
-				}
-				} catch (Exception e) {
-				System.out.println("[NaverCal ERROR] ICS 파싱 오류: " + e.getMessage());
-			}
-			return result;
-		}
-		
-		private List<CalendarEvent> parseIcsWithIcal4j_(String icsText,
-			ZonedDateTime qStart, ZonedDateTime qEnd) {
-			List<CalendarEvent> result = new ArrayList<>();
-			try {
-				String cleanedIcs = icsText.replaceAll(
-				"(?s)BEGIN:VALARM.*?END:VALARM\\r?\\n?", "");
-				
-				CalendarBuilder builder = new CalendarBuilder();
-				Calendar cal = builder.build(new StringReader(cleanedIcs));
-				
-				for (Object comp : cal.getComponents(Component.VEVENT)) {
-					VEvent vevent = (VEvent) comp;
-					try {
-						String uid = vevent.getUid()
-						.map(Uid::getValue)
-						.orElse(UUID.randomUUID().toString());
-						
-						Summary sumProp = vevent.getSummary();
-						String title = (sumProp != null) ? sumProp.getValue() : "(제목 없음)";
-						
-						// ✅ 개선: 모든 이벤트를 Instant 기준으로 처리
-						Period<Instant> searchPeriod = new Period<>(
-						qStart.toInstant(), qEnd.toInstant());
-						
-						Collection<Period<Instant>> periods = 
-						vevent.calculateRecurrenceSet(searchPeriod);
-						
-						if (periods == null || periods.isEmpty()) continue;
-						
-						for (Period<Instant> p : periods) {
-							// ✅ 각 발생 인스턴스의 시작 시간으로 allDay 여부 재확인
-							boolean isAllDay = checkIfAllDayAt(vevent, p.getStart());
-							
-							if (isAllDay) {
-								// 종일: 날짜만 사용
-								LocalDate startDate = p.getStart().atZone(ZoneId.systemDefault()).toLocalDate();
-								LocalDate endDate = p.getEnd().atZone(ZoneId.systemDefault()).toLocalDate();
-								result.add(new CalendarEvent(uid, title, 
-									startDate.atStartOfDay(ZoneId.systemDefault()),
-									endDate.atStartOfDay(ZoneId.systemDefault()), 
-								true));
-								} else {
-								// 시간 이벤트: Instant 직접 사용
+								LocalDate s = p.getStart();
+								LocalDate e = p.getEnd();
+								// 조회 범위와 겹치는지 확인
+								if (e.isBefore(qStart.toLocalDate())) continue;
+								if (s.isAfter(qEnd.toLocalDate()))    continue;
 								result.add(new CalendarEvent(uid, title,
-									p.getStart().atZone(ZoneId.systemDefault()),
-									p.getEnd().atZone(ZoneId.systemDefault()),
-								false));
+									s.atStartOfDay(ZoneId.systemDefault()),
+									e.atStartOfDay(ZoneId.systemDefault()), true));
+							}
+						} else {
+							// ── 시간 기반 이벤트 ─────────────────────────
+							// TZID 로컬타임 / UTC(Z) / floating 모두 ZonedDateTime 으로 읽은 뒤
+							// 조회 범위와 직접 비교 (ical4j Period<Instant> 타입 미스매치 우회)
+							List<ZonedDateTime[]> occurrences = expandTimed(vevent, qStart, qEnd);
+							for (ZonedDateTime[] se : occurrences) {
+								result.add(new CalendarEvent(uid, title, se[0], se[1], false));
 							}
 						}
-						} catch (Exception e) {
-						System.out.println("[NaverCal ERROR] VEVENT 처리 오류: " + e.getMessage());
+					} catch (Exception e) {
+						String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+						if (msg.contains("Unsupported unit") || msg.contains("Unable to obtain")) {
+							System.out.println("[NaverCal DEBUG] 일부 일정 파싱 실패 (무시): " + msg);
+						} else {
+							System.out.println("[NaverCal ERROR] VEVENT 처리 오류: " + msg);
+						}
 					}
 				}
-				} catch (ParserException e) {
+			} catch (Exception e) {
 				System.out.println("[NaverCal ERROR] ICS 파싱 오류: " + e.getMessage());
-				} catch (Exception e) {
-				System.out.println("[NaverCal ERROR] 예상치 못한 오류: " + e.getMessage());
 			}
 			return result;
 		}
-		
-		// ✅ 새 헬퍼 메서드: 특정 날짜에서 allDay 여부 확인
-		private boolean checkIfAllDayAt(VEvent vevent, Instant occurrence) {
+
+		/**
+		 * 시간 기반 VEVENT 의 발생 인스턴스를 조회 범위 내에서 수집.
+		 *
+		 * ical4j 의 calculateRecurrenceSet(Period<Instant>) 은
+		 * TZID 로컬타임 DTSTART 와 타입 미스매치가 생겨 빈 결과를 내는 경우가 있으므로,
+		 * DTSTART/RRULE/EXDATE 를 직접 파싱하여 ZonedDateTime 으로 전개한다.
+		 *
+		 * 처리 순서:
+		 *  1) DTSTART 를 ZonedDateTime 으로 파싱 (TZID / Z / floating)
+		 *  2) DTEND 또는 DURATION 으로 이벤트 길이 계산
+		 *  3) RRULE 이 없으면 단일 이벤트
+		 *  4) RRULE 이 있으면 FREQ/INTERVAL/COUNT/UNTIL/BYDAY/BYMONTHDAY 지원
+		 *  5) EXDATE 로 예외 날짜 제거
+		 */
+		private List<ZonedDateTime[]> expandTimed(VEvent vevent,
+				ZonedDateTime qStart, ZonedDateTime qEnd) {
+			List<ZonedDateTime[]> result = new ArrayList<>();
 			try {
-				return vevent
-				.<net.fortuna.ical4j.model.Property>getProperty(
-				net.fortuna.ical4j.model.Property.DTSTART)
-				.flatMap(ds -> ds.<net.fortuna.ical4j.model.Parameter>getParameter(
-				Parameter.VALUE))
-				.map(v -> Value.DATE.equals(v))
-				.orElse(false);
-				} catch (Exception e) {
-				return false;
-			}
-		}
-		
-		private List<CalendarEvent> parseIcsWithIcal4j___(String icsText,
-			ZonedDateTime qStart, ZonedDateTime qEnd) {
-			List<CalendarEvent> result = new ArrayList<>();
-			try {
-				String cleanedIcs = icsText.replaceAll(	"(?s)BEGIN:VALARM.*?END:VALARM\\r?\\n?", "");
-				
-				CalendarBuilder builder = new CalendarBuilder();
-				Calendar cal = builder.build(new StringReader(cleanedIcs));
-				
-				Period<Instant> instantPeriod = new Period<>(
-				qStart.toInstant(), qEnd.toInstant());
-				Period<LocalDate> datePeriod = new Period<>(
-				qStart.toLocalDate(), qEnd.toLocalDate());
-				
-				for (Object comp : cal.getComponents(Component.VEVENT)) 
-				{
-					VEvent vevent = (VEvent) comp;
-					try {
-						String uid = vevent.getUid()
-						.map(Uid::getValue)
-						.orElse(UUID.randomUUID().toString());
-						
-						Summary sumProp = vevent.getSummary();
-						String title = (sumProp != null) ? sumProp.getValue() : "(제목 없음)";
-						
-						boolean allDay = vevent
-						.<net.fortuna.ical4j.model.Property>getProperty(
-						net.fortuna.ical4j.model.Property.DTSTART)
-						.flatMap(ds -> ds.<net.fortuna.ical4j.model.Parameter>getParameter(
-						Parameter.VALUE))
-						.map(v -> Value.DATE.equals(v))
-						.orElse(false);
-						
-						if (allDay) {
-							// 종일 이벤트 처리 (그대로 유지)
-							Collection<Period<LocalDate>> periods = vevent.calculateRecurrenceSet(datePeriod);
-							if (periods == null || periods.isEmpty()) continue;
-							for (Period<LocalDate> p : periods) 
-							{
-								ZonedDateTime evStart = p.getStart().atStartOfDay(ZoneId.systemDefault());
-								ZonedDateTime evEnd = p.getEnd().atStartOfDay(ZoneId.systemDefault());
-								result.add(new CalendarEvent(uid, title, evStart, evEnd, true));
-							}
-							} else {
-							// ✅ 수정: 시간 기반 이벤트 - Instant 직접 사용
-							Collection<Period<Instant>> periods = vevent.calculateRecurrenceSet(instantPeriod);
-							if (periods == null || periods.isEmpty()) continue;
-							for (Period<Instant> p : periods) 
-							{
-								// Instant를 바로 ZonedDateTime으로 변환
-								ZonedDateTime evStart = p.getStart().atZone(ZoneId.systemDefault());
-								ZonedDateTime evEnd = p.getEnd().atZone(ZoneId.systemDefault());
-								result.add(new CalendarEvent(uid, title, evStart, evEnd, false));
-							}
-						}
-						} catch (Exception e) {
-						System.out.println("[NaverCal ERROR] VEVENT 처리 오류: " + e.getMessage());
+				// ── DTSTART ───────────────────────────────────────────
+				ZonedDateTime dtStart = parseDtProp(vevent, "DTSTART");
+				if (dtStart == null) return result;
+
+				// ── DURATION (초 단위) ────────────────────────────────
+				long durationSec = 0;
+				ZonedDateTime dtEnd = parseDtProp(vevent, "DTEND");
+				if (dtEnd != null) {
+					durationSec = java.time.Duration.between(dtStart, dtEnd).getSeconds();
+				} else {
+					// DURATION 프로퍼티
+					Optional<net.fortuna.ical4j.model.Property> durProp =
+					vevent.getProperty("DURATION");
+					if (durProp.isPresent()) {
+						durationSec = parseDuration(durProp.get().getValue());
+					}
+					if (durationSec == 0) durationSec = 3600; // 기본 1시간
+				}
+				final long dur = durationSec;
+
+				// ── EXDATE 수집 ───────────────────────────────────────
+				Set<String> exDates = new HashSet<>();
+				for (Object p : vevent.getProperties("EXDATE")) {
+					net.fortuna.ical4j.model.Property ep =
+					(net.fortuna.ical4j.model.Property) p;
+					for (String v : ep.getValue().split(",")) {
+						exDates.add(v.trim().replace("Z","").replace("-","").replace(":",""));
 					}
 				}
-				} catch (ParserException e) {
-				System.out.println("[NaverCal ERROR] ICS 파싱 오류: " + e.getMessage());
-				} catch (Exception e) {
-				System.out.println("[NaverCal ERROR] 예상치 못한 오류: " + e.getMessage());
+
+				// ── RRULE ─────────────────────────────────────────────
+				Optional<net.fortuna.ical4j.model.Property> rruleProp =
+				vevent.getProperty("RRULE");
+
+				if (!rruleProp.isPresent()) {
+					// 단일 이벤트
+					addIfInRange(result, dtStart, dur, qStart, qEnd, exDates);
+					return result;
+				}
+
+				// RRULE 파싱
+				Map<String,String> rrule = parseRRule(rruleProp.get().getValue());
+				String freq     = rrule.getOrDefault("FREQ", "");
+				int    interval = Integer.parseInt(rrule.getOrDefault("INTERVAL", "1"));
+				int    count    = rrule.containsKey("COUNT")
+								? Integer.parseInt(rrule.get("COUNT")) : Integer.MAX_VALUE;
+				ZonedDateTime until = rrule.containsKey("UNTIL")
+								? parseDateStr(rrule.get("UNTIL"), dtStart.getZone()) : null;
+				List<Integer> byDay       = parseByDay(rrule.getOrDefault("BYDAY",""));
+				List<Integer> byMonthDay  = parseByMonthDay(rrule.getOrDefault("BYMONTHDAY",""));
+				List<Integer> byMonth     = parseByMonth(rrule.getOrDefault("BYMONTH",""));
+
+				// 반복 전개 상한: 조회 종료일 또는 UNTIL 중 이른 것
+				ZonedDateTime expandEnd = (until != null && until.isBefore(qEnd)) ? until : qEnd;
+				// 시작은 DTSTART 부터 (과거 반복이 조회범위 안에 들어올 수 있음)
+				ZonedDateTime cur = dtStart;
+				int generated = 0;
+
+				while (!cur.isAfter(expandEnd) && generated < count) {
+					// BYDAY / BYMONTHDAY 필터
+					if (matchesByDay(cur, byDay) && matchesByMonthDay(cur, byMonthDay)
+							&& matchesByMonth(cur, byMonth)) {
+						addIfInRange(result, cur, dur, qStart, qEnd, exDates);
+						generated++;
+					}
+					// 다음 발생
+					switch (freq) {
+						case "DAILY":   cur = cur.plusDays(interval);   break;
+						case "WEEKLY":  cur = cur.plusWeeks(interval);  break;
+						case "MONTHLY": cur = cur.plusMonths(interval); break;
+						case "YEARLY":  cur = cur.plusYears(interval);  break;
+						default: return result; // 알 수 없는 FREQ
+					}
+				}
+			} catch (Exception e) {
+				System.out.println("[NaverCal ERROR] expandTimed 오류: " + e.getMessage());
 			}
 			return result;
 		}
-		
-		
+
+		/** DTSTART/DTEND 프로퍼티를 ZonedDateTime 으로 변환 */
+		private ZonedDateTime parseDtProp(VEvent vevent, String propName) {
+			try {
+				Optional<net.fortuna.ical4j.model.Property> opt = vevent.getProperty(propName);
+				if (!opt.isPresent()) return null;
+				net.fortuna.ical4j.model.Property prop = opt.get();
+				String val  = prop.getValue();           // e.g. 20260328T090000
+				String tzid = "";
+				Optional<net.fortuna.ical4j.model.Parameter> tzParam = prop.getParameter("TZID");
+				if (tzParam.isPresent()) tzid = tzParam.get().getValue();
+				return parseDateStr(val, tzid.isEmpty() ? null
+					: ZoneId.of(tzid, ZoneId.SHORT_IDS));
+			} catch (Exception e) {
+				return null;
+			}
+		}
+
+		/** 날짜/시간 문자열 → ZonedDateTime */
+		private ZonedDateTime parseDateStr(String val, ZoneId zone) {
+			if (val == null || val.length() < 8) return null;
+			val = val.trim();
+			try {
+				if (val.length() == 8) {
+					// DATE only (종일): 00:00 로컬
+					LocalDate d = LocalDate.parse(val, DateTimeFormatter.BASIC_ISO_DATE);
+					return d.atStartOfDay(zone != null ? zone : ZoneId.systemDefault());
+				}
+				boolean isUtc = val.endsWith("Z");
+				String core = val.replace("Z","").replace("-","").replace(":","");
+				// YYYYMMDDTHHmmss
+				LocalDate  date = LocalDate.of(
+					Integer.parseInt(core.substring(0,4)),
+					Integer.parseInt(core.substring(4,6)),
+					Integer.parseInt(core.substring(6,8)));
+				int hh = core.length() > 9  ? Integer.parseInt(core.substring(9,11))  : 0;
+				int mm = core.length() > 11 ? Integer.parseInt(core.substring(11,13)) : 0;
+				int ss = core.length() > 13 ? Integer.parseInt(core.substring(13,15)) : 0;
+				LocalDateTime ldt = date.atTime(hh, mm, ss);
+				if (isUtc) return ldt.atZone(ZoneOffset.UTC).withZoneSameInstant(ZoneId.systemDefault());
+				return ldt.atZone(zone != null ? zone : ZoneId.systemDefault());
+			} catch (Exception e) {
+				return null;
+			}
+		}
+
+		/** DURATION 문자열(PT1H30M 등) → 초 */
+		private long parseDuration(String dur) {
+			if (dur == null) return 0;
+			long total = 0;
+			java.util.regex.Matcher m =
+			java.util.regex.Pattern.compile("(\\d+)([WDHMS])").matcher(dur.toUpperCase());
+			while (m.find()) {
+				long v = Long.parseLong(m.group(1));
+				switch (m.group(2)) {
+					case "W": total += v * 7 * 86400; break;
+					case "D": total += v * 86400;      break;
+					case "H": total += v * 3600;       break;
+					case "M": total += v * 60;         break;
+					case "S": total += v;              break;
+				}
+			}
+			return total;
+		}
+
+		/** RRULE 문자열 → Map */
+		private Map<String,String> parseRRule(String rrule) {
+			Map<String,String> map = new LinkedHashMap<>();
+			for (String part : rrule.split(";")) {
+				int eq = part.indexOf('=');
+				if (eq > 0) map.put(part.substring(0,eq).trim().toUpperCase(),
+									part.substring(eq+1).trim());
+			}
+			return map;
+		}
+
+		/** BYDAY=MO,WE,FR → [2,4,6] (Calendar.DAY_OF_WEEK 값) */
+		private List<Integer> parseByDay(String byday) {
+			List<Integer> list = new ArrayList<>();
+			if (byday.isEmpty()) return list;
+			Map<String,Integer> dow = new java.util.HashMap<>();
+			dow.put("SU",1); dow.put("MO",2); dow.put("TU",3); dow.put("WE",4);
+			dow.put("TH",5); dow.put("FR",6); dow.put("SA",7);
+			for (String d : byday.split(",")) {
+				String key = d.replaceAll("[^A-Z]","");
+				if (dow.containsKey(key)) list.add(dow.get(key));
+			}
+			return list;
+		}
+
+		/** BYMONTHDAY=1,15 → [1,15] */
+		private List<Integer> parseByMonthDay(String s) {
+			List<Integer> list = new ArrayList<>();
+			if (s.isEmpty()) return list;
+			for (String v : s.split(",")) {
+				try { list.add(Integer.parseInt(v.trim())); } catch (Exception ignored) {}
+			}
+			return list;
+		}
+
+		/** BYMONTH=1,6 → [1,6] */
+		private List<Integer> parseByMonth(String s) {
+			List<Integer> list = new ArrayList<>();
+			if (s.isEmpty()) return list;
+			for (String v : s.split(",")) {
+				try { list.add(Integer.parseInt(v.trim())); } catch (Exception ignored) {}
+			}
+			return list;
+		}
+
+		private boolean matchesByDay(ZonedDateTime dt, List<Integer> byDay) {
+			if (byDay.isEmpty()) return true;
+			int dow = dt.getDayOfWeek().getValue() % 7 + 1; // ISO→Calendar (SU=1)
+			return byDay.contains(dow);
+		}
+
+		private boolean matchesByMonthDay(ZonedDateTime dt, List<Integer> byMonthDay) {
+			if (byMonthDay.isEmpty()) return true;
+			return byMonthDay.contains(dt.getDayOfMonth());
+		}
+
+		private boolean matchesByMonth(ZonedDateTime dt, List<Integer> byMonth) {
+			if (byMonth.isEmpty()) return true;
+			return byMonth.contains(dt.getMonthValue());
+		}
+
+		/** 발생 인스턴스가 조회 범위 안에 있고 EXDATE 가 아니면 result 에 추가 */
+		private void addIfInRange(List<ZonedDateTime[]> result,
+				ZonedDateTime start, long durSec,
+				ZonedDateTime qStart, ZonedDateTime qEnd,
+				Set<String> exDates) {
+			ZonedDateTime end = start.plusSeconds(durSec);
+			// 이벤트가 조회 범위와 겹치는지 (시작 < 조회끝 && 끝 > 조회시작)
+			if (!start.isBefore(qEnd) || !end.isAfter(qStart)) return;
+			// EXDATE 확인
+			String key = start.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+			if (exDates.contains(key)) return;
+			result.add(new ZonedDateTime[]{ start, end });
+		}
+
 		private ZonedDateTime extractZonedDateTime(VEvent vevent, String propName,
 			LocalDate occurrenceDate) {
 			try {
@@ -601,6 +675,141 @@ public class NaverCalendarService {
 			+ "</D:propfind>";
 		}
 		
+		/**
+		 * calendar-query REPORT 요청 본문.
+		 * 서버 측 날짜 범위 필터(time-range) + calendar-data(ICS 본문) 포함.
+		 * → 캘린더 1개당 네트워크 요청 1회로 모든 ICS를 한 번에 수신.
+		 */
+		/**
+		 * 캘린더 URL에서 조회 범위 내 ICS 본문 목록을 가져온다.
+		 *
+		 * 1단계: PROPFIND(depth=1) → 전체 .ics href 목록 + etag 수신 (빠름)
+		 * 2단계: calendar-multiget REPORT → href 목록을 서버에 보내 ICS 본문 일괄 수신 (1회)
+		 *
+		 * 네이버 CalDAV는 time-range 필터(calendar-query)를 무시하므로
+		 * multiget 으로 전체 ICS 를 한 번에 받은 뒤 클라이언트에서 날짜 필터링한다.
+		 */
+		private List<String> fetchIcsTexts(String calUrl,
+				ZonedDateTime start, ZonedDateTime end) throws IOException {
+
+			// ── 1단계: PROPFIND → href 목록 ─────────────────────────
+			String propResp = caldavRequest("PROPFIND", calUrl,
+				propfindIcsBody(), "application/xml", "1");
+			if (propResp == null || propResp.isEmpty()) return new ArrayList<>();
+
+			List<String> hrefs = extractIcsHrefs(propResp);
+			String calName = calUrl.replaceAll(".*/calendar/", "");
+			System.out.println("[NaverCal] " + calName + " → .ics " + hrefs.size() + "건");
+			if (hrefs.isEmpty()) return new ArrayList<>();
+
+			// ── 2단계: calendar-multiget REPORT → ICS 본문 일괄 수신 ─
+			try {
+				String multigetBody = calendarMultigetBody(hrefs);
+				String multigetResp = caldavRequest("REPORT", calUrl,
+					multigetBody, "application/xml", "1");
+				if (multigetResp != null && !multigetResp.trim().isEmpty()) {
+					List<String> icsTexts = extractCalendarData(multigetResp);
+					if (!icsTexts.isEmpty()) {
+						System.out.println("[NaverCal] multiget 성공 → " + calName + " " + icsTexts.size() + "건");
+						return icsTexts;
+					}
+				}
+				System.out.println("[NaverCal] multiget 응답 없음 → 개별 GET 폴백");
+			} catch (Exception e) {
+				System.out.println("[NaverCal] multiget 실패 → 개별 GET 폴백: " + e.getMessage());
+			}
+
+			// ── 폴백: 개별 GET ───────────────────────────────────────
+			List<String> result = new ArrayList<>();
+			for (String href : hrefs) {
+				try {
+					String absUrl = href.startsWith("http") ? href : CALDAV_BASE + href;
+					String icsText = caldavRequest("GET", absUrl, null, "text/calendar", "0");
+					if (icsText != null && !icsText.isEmpty()) result.add(icsText);
+				} catch (Exception e) {
+					System.out.println("[NaverCal ERROR] GET 실패: " + e.getMessage());
+				}
+			}
+			return result;
+		}
+
+
+
+		/**
+		 * calendar-multiget REPORT 요청 본문.
+		 * href 목록을 서버에 전달하면 해당 ICS 본문을 한 번에 반환한다.
+		 * time-range 필터 없이 href 기반으로 동작하므로 네이버도 지원한다.
+		 */
+		private String calendarMultigetBody(List<String> hrefs) {
+			StringBuilder sb = new StringBuilder();
+			sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+			sb.append("<C:calendar-multiget xmlns:D=\"DAV:\"\n");
+			sb.append("                     xmlns:C=\"urn:ietf:params:xml:ns:caldav\">\n");
+			sb.append("  <D:prop>\n");
+			sb.append("    <D:getetag/>\n");
+			sb.append("    <C:calendar-data/>\n");
+			sb.append("  </D:prop>\n");
+			for (String href : hrefs) {
+				// href가 절대경로(/caldav/...)면 그대로, 상대경로면 그대로 사용
+				String h = href.startsWith("http")
+					? URI.create(href).getRawPath()  // 절대URL이면 path만 추출
+					: href;
+				sb.append("  <D:href>").append(h).append("</D:href>\n");
+			}
+			sb.append("</C:calendar-multiget>");
+			return sb.toString();
+		}
+
+		private String calendarQueryBody(ZonedDateTime start, ZonedDateTime end) {
+			// CalDAV time-range 는 UTC ISO8601 기본형 (Z 접미사)
+			DateTimeFormatter fmt = DateTimeFormatter
+				.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+				.withZone(ZoneOffset.UTC);
+			String tStart = fmt.format(start.toInstant());
+			String tEnd   = fmt.format(end.toInstant());
+			return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+				+ "<C:calendar-query xmlns:D=\"DAV:\"\n"
+				+ "                  xmlns:C=\"urn:ietf:params:xml:ns:caldav\">\n"
+				+ "  <D:prop>\n"
+				+ "    <D:getetag/>\n"
+				+ "    <C:calendar-data/>\n"
+				+ "  </D:prop>\n"
+				+ "  <C:filter>\n"
+				+ "    <C:comp-filter name=\"VCALENDAR\">\n"
+				+ "      <C:comp-filter name=\"VEVENT\">\n"
+				+ "        <C:time-range start=\"" + tStart + "\" end=\"" + tEnd + "\"/>\n"
+				+ "      </C:comp-filter>\n"
+				+ "    </C:comp-filter>\n"
+				+ "  </C:filter>\n"
+				+ "</C:calendar-query>";
+		}
+
+		/**
+		 * REPORT 응답 XML에서 calendar-data 요소(ICS 본문) 목록 추출.
+		 * XML 파서로 calendar-data 태그 내용을 수집한다.
+		 */
+		private List<String> extractCalendarData(String xmlResp) {
+			List<String> list = new ArrayList<>();
+			try {
+				DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+				dbf.setNamespaceAware(true);
+				dbf.setFeature("http://xml.org/sax/features/external-general-entities", false);
+				dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+				DocumentBuilder db = dbf.newDocumentBuilder();
+				db.setErrorHandler(null);
+				Document doc = db.parse(new InputSource(new StringReader(xmlResp)));
+				// calendar-data 는 네임스페이스 무관하게 로컬명으로 검색
+				NodeList nodes = doc.getElementsByTagNameNS("*", "calendar-data");
+				for (int i = 0; i < nodes.getLength(); i++) {
+					String text = nodes.item(i).getTextContent();
+					if (text != null && !text.trim().isEmpty()) list.add(text.trim());
+				}
+			} catch (Exception e) {
+				System.out.println("[NaverCal ERROR] calendar-data 추출 오류: " + e.getMessage());
+			}
+			return list;
+		}
+
 		private String propfindIcsBody() {
 			return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 			+ "<D:propfind xmlns:D=\"DAV:\">\n"
@@ -620,10 +829,8 @@ public class NaverCalendarService {
 			? body.getBytes(StandardCharsets.UTF_8)
 			: new byte[0];
 			
-			String password = new String(naverPassword);
 			String encodedAuth = Base64.getEncoder().encodeToString(
-			(naverId + ":" + password).getBytes(StandardCharsets.UTF_8));
-			Arrays.fill(password.toCharArray(), ' ');
+			(naverId + ":" + naverPassword).getBytes(StandardCharsets.UTF_8));
 			
 			StringBuilder req = new StringBuilder();
 			req.append(method).append(" ").append(path).append(" HTTP/1.1\r\n");
@@ -779,9 +986,6 @@ public class NaverCalendarService {
 		
 		public void cleanup() {
 			processedEventKeys.clear();
-			if (naverPassword != null) {
-				Arrays.fill(naverPassword, ' ');
-			}
 			System.out.println("[NaverCal] 리소스 정리 완료");
 		}
 		

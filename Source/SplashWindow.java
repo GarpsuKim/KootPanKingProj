@@ -2099,6 +2099,80 @@ public class SplashWindow extends JFrame {
             e.printStackTrace();
 		}
 	}	
+
+	// ═══════════════════════════════════════════════════════════
+	//  TextFileReader (내부 static 클래스 - SplashWindow/SuperDir 전용)
+	//  인코딩 자동 탐지: UTF-8 BOM → UTF-16 BE BOM → UTF-8 → CP949
+	// ═══════════════════════════════════════════════════════════
+	static class TextFileReader {
+		public static class Result {
+			public final String encLabel;
+			public final String content;
+			public Result(String encLabel, String content) {
+				this.encLabel = encLabel;
+				this.content  = content;
+			}
+		}
+
+		public static Result read(java.io.File file) throws java.io.IOException {
+			String enc = "CP949", encLabel = "[ CP949 ]";
+			try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
+				byte[] bom = new byte[3];
+				int bomRead = fis.read(bom, 0, 3);
+				if (bomRead >= 3 && bom[0]==(byte)0xEF && bom[1]==(byte)0xBB && bom[2]==(byte)0xBF)
+					return new Result("[ UTF-8 BOM ]", readAll(fis, "UTF-8"));
+				if (bomRead >= 2 && bom[0]==(byte)0xFE && bom[1]==(byte)0xFF) {
+					java.io.InputStream rest = new java.io.SequenceInputStream(
+						new java.io.ByteArrayInputStream(bom, 0, bomRead), fis);
+					return new Result("[ UTF-16 BE BOM ]", readAll(rest, "UTF-16BE"));
+				}
+				java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream(
+					(int) Math.min(file.length(), 4 * 1024 * 1024));
+				baos.write(bom, 0, bomRead);
+				byte[] buf = new byte[8192]; int n;
+				while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+				byte[] all = baos.toByteArray();
+				if (isValidUTF8(all)) { enc = "UTF-8"; encLabel = "[ UTF-8 ]"; }
+				return new Result(encLabel, readAll(new java.io.ByteArrayInputStream(all), enc));
+			}
+		}
+
+		public static Result read(String fullPath) throws java.io.IOException {
+			return read(new java.io.File(fullPath));
+		}
+
+		public static String readContent(java.io.File file) throws java.io.IOException {
+			return read(file).content;
+		}
+
+		public static String readContent(String fullPath) throws java.io.IOException {
+			return read(new java.io.File(fullPath)).content;
+		}
+
+		private static String readAll(java.io.InputStream is, String enc) throws java.io.IOException {
+			java.io.BufferedReader br = new java.io.BufferedReader(
+				new java.io.InputStreamReader(is, enc), 1024 * 1024);
+			StringBuilder sb = new StringBuilder();
+			String line; boolean first = true;
+			while ((line = br.readLine()) != null) {
+				if (!first) sb.append("\n");
+				sb.append(line); first = false;
+			}
+			return sb.toString();
+		}
+
+		private static boolean isValidUTF8(byte[] all) {
+			try {
+				java.nio.charset.CharsetDecoder dec =
+					java.nio.charset.StandardCharsets.UTF_8.newDecoder();
+				dec.onMalformedInput(java.nio.charset.CodingErrorAction.REPORT);
+				dec.onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT);
+				dec.decode(java.nio.ByteBuffer.wrap(all));
+				return true;
+			} catch (Exception e) { return false; }
+		}
+	}
+
 }   //  public class SplashWindow 
 // ═══════════════════════════════════════════════════════════
 //  KootPanKing.main() 수정 예시 (참고용 주석)
