@@ -19,8 +19,8 @@ echo ============================================
 echo   KootPanKing 다운로드 및 실행
 echo ============================================
 set "URL=https://github.com/GarpsuKim/KootPanKing/releases/download/v1.0.0/KootPanKing.zip"
-set "ZIP=KootPanKingRelease.zip"
-set "DIR=KootPanKing"
+set "ZIP=%ROOT%/KootPanKingRelease.zip"
+set "DIR=%ROOT%/KootPanKing"
 echo.
 echo [1/3] 다운로드 중...
 where curl.exe >nul 2>&1

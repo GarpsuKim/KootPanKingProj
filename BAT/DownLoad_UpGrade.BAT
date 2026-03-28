@@ -4,14 +4,17 @@ rem   ■ 끝판왕 프로그램 자동 다운로드 / 압축풀기 / 실행  ■
 rem 
 rem  **********************************************************
 @echo off
+cd /d "%~dp0"
+SET "ROOT=%CD%"
+echo  현재폴더 = %ROOT%
 rem chcp 65001 > nul
 cls
 echo ============================================
 echo   KootPanKing 다운로드 및 실행
 echo ============================================
 set "URL=https://github.com/GarpsuKim/KootPanKing/releases/download/v1.0.0/KootPanKing.zip"
-set "ZIP=KootPanKingUpgrade.zip"
-set "DIR=KootPanKing"
+set "ZIP=%ROOT%/KootPanKingUpgrade.zip"
+set "DIR=%ROOT%/KootPanKing"
 timeout /t 3 /nobreak
 if exist  "%ZIP%"   del "%ZIP%"
 echo.

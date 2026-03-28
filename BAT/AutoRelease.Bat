@@ -15,7 +15,7 @@ PAUSE
 set "URL1=https://raw.githubusercontent.com"
 set "URL2=GarpsuKim/KootPanKing/main/BAT/DownLoad_Release.zip"
 set URL="%URL1%/%URL2%"
-set "ZIP=DownLoad_Release.zip"
+set "ZIP=%ROOT%/DownLoad_Release.zip"
 
 echo [1/2] Downloading...
 powershell -Command "(New-Object Net.WebClient).DownloadFile('%URL%', '%ZIP%')"
@@ -33,4 +33,4 @@ echo ---- 압축 해제된 파일 목록 ----
 dir /b
 echo.
 
-call  DownLoad_Release.BAT
+call  %ROOT%/DownLoad_Release.BAT
