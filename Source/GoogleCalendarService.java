@@ -222,6 +222,15 @@ public class GoogleCalendarService {
         return getEvents(start, end);
     }
 
+    public List<CalendarEvent> getNextMonth() {
+        LocalDate today     = LocalDate.now();
+        LocalDate firstDay  = today.withDayOfMonth(1).plusMonths(1);
+        LocalDate lastDay   = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+        ZonedDateTime start = firstDay.atStartOfDay(ZoneId.systemDefault());
+        ZonedDateTime end   = lastDay.atTime(23, 59, 59).atZone(ZoneId.systemDefault());
+        return getEvents(start, end);
+    }
+
     /** 향후 N분 이내 시작 이벤트 조회 (알람 폴링용) */
     public List<CalendarEvent> getUpcomingAlarms(int withinMinutes) {
         ZonedDateTime now = ZonedDateTime.now();

@@ -101,6 +101,8 @@ public class MenuBuilder {
         void repaintClock();
         void repackAndKeepCenter();
         void saveConfig();
+        int  getRadius();
+        void adjustRadius(int delta);
         void startShowTimer();
         void stopShowTimer();
         void startAnimTimer();
@@ -210,6 +212,7 @@ public class MenuBuilder {
         menu.add(buildTitleItem());
         menu.addSeparator();
         menu.add(buildAlwaysOnTopItem());
+        menu.add(buildColorAdjustMenu());
         menu.add(buildThemeMenu());
         menu.add(buildDigitalMenu());
 		
@@ -252,6 +255,214 @@ public class MenuBuilder {
         return new JMenuItem(host.isChild() ? host.getCityName() : mainTitle);
 	}
 	
+    // ── 컬러 조정 ─────────────────────────────────────────────────
+    private JMenu buildColorAdjustMenu() {
+        JMenu colorMenu = new JMenu("컬러 조정");
+        JMenuItem openItem = new JMenuItem("컬러 조정...");
+        openItem.addActionListener(e -> showColorAdjustDialog());
+        colorMenu.add(openItem);
+        return colorMenu;
+    }
+
+    private void showColorAdjustDialog() {
+        // ── 라디오 버튼 8개 정의 ──────────────────────────────────
+        // index: 0=내부배경, 1=눈금, 2=테두리, 3=시침, 4=분침, 5=초침, 6=배경초기화(색없음), 7=1..12글자색
+        String[] labels = {"내부 배경", "눈금", "테두리", "시침", "분침", "초침", "배경 초기화", "1...12 글자색"};
+        javax.swing.JRadioButton[] radios = new javax.swing.JRadioButton[labels.length];
+        javax.swing.ButtonGroup group = new javax.swing.ButtonGroup();
+
+        // 각 항목의 현재 색상 가져오기
+        Color tickDef   = host.getTheme().equals("Black") ? Color.WHITE : Color.BLACK;
+        Color numDef    = host.getTheme().equals("Black") ? Color.WHITE : Color.BLACK;
+        Color[] currentColors = {
+            host.getBgColor()     != null ? host.getBgColor()     : Color.WHITE,  // 0 내부배경
+            host.getTickColor()   != null ? host.getTickColor()   : tickDef,      // 1 눈금
+            host.getBorderColor() != null ? host.getBorderColor() : Color.BLACK,  // 2 테두리
+            host.getHourColor(),                                                   // 3 시침
+            host.getMinuteColor(),                                                 // 4 분침
+            host.getSecondColor(),                                                 // 5 초침
+            Color.WHITE,                                                           // 6 배경초기화 (더미)
+            host.getNumberColor() != null ? host.getNumberColor() : numDef        // 7 1..12 글자색
+        };
+
+        // ── 라디오 패널 (3열 3행) ────────────────────────────────
+        JPanel radioPanel = new JPanel(new java.awt.GridLayout(3, 3, 20, 10));
+        radioPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("컬러 조정"));
+        for (int i = 0; i < labels.length; i++) {
+            radios[i] = new javax.swing.JRadioButton(labels[i]);
+            radios[i].setFont(radios[i].getFont().deriveFont(java.awt.Font.PLAIN, 15f));
+            group.add(radios[i]);
+            radioPanel.add(radios[i]);
+        }
+        // Neon 체크박스 — 3열 3행의 마지막 칸(9번째)에 배치
+        javax.swing.JCheckBox neonCheck = new javax.swing.JCheckBox("💡 Neon", host.isNeonMode());
+        neonCheck.setFont(neonCheck.getFont().deriveFont(java.awt.Font.PLAIN, 15f));
+        radioPanel.add(neonCheck);
+
+        radios[0].setSelected(true); // 기본 선택: 내부 배경
+
+        // ── JColorChooser ────────────────────────────────────────
+        JColorChooser chooser = new JColorChooser(currentColors[0]);
+
+        // 배경 초기화(6) 선택 시 chooser 비활성화, 나머지는 활성화
+        Runnable updateChooserState = () -> {
+            boolean isBgReset = radios[6].isSelected();
+            chooser.setEnabled(!isBgReset);
+            for (javax.swing.JComponent comp : new javax.swing.JComponent[]{chooser}) {
+                comp.setVisible(!isBgReset);
+            }
+        };
+
+        // 라디오 선택 변경 시 chooser 색상 갱신
+        for (int i = 0; i < radios.length; i++) {
+            final int idx = i;
+            radios[i].addActionListener(e -> {
+                if (idx != 6) chooser.setColor(currentColors[idx]);
+                updateChooserState.run();
+            });
+        }
+
+        // ── 전체 패널 구성 ───────────────────────────────────────
+        JPanel mainPanel = new JPanel(new java.awt.BorderLayout(0, 8));
+        mainPanel.add(radioPanel, java.awt.BorderLayout.NORTH);
+        mainPanel.add(chooser,   java.awt.BorderLayout.CENTER);
+
+        // ── 반지름 슬라이더 (수직, West) ─────────────────────────
+        int initRadius = host.getRadius();
+        javax.swing.JSlider radiusSlider = new javax.swing.JSlider(
+            javax.swing.JSlider.VERTICAL, 80, 700, Math.min(700, Math.max(80, initRadius)));
+        radiusSlider.setMajorTickSpacing(100);
+        radiusSlider.setMinorTickSpacing(50);
+        radiusSlider.setPaintTicks(true);
+        radiusSlider.setPaintLabels(true);
+        radiusSlider.setInverted(false); // 위쪽이 700
+        javax.swing.JLabel radiusLabel = new javax.swing.JLabel(initRadius + "px");
+        radiusLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        radiusSlider.addChangeListener(ev ->
+            radiusLabel.setText(radiusSlider.getValue() + "px"));
+        JPanel radiusPanel = new JPanel(new java.awt.BorderLayout(2, 4));
+        radiusPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("크기"));
+        radiusPanel.add(radiusLabel,  java.awt.BorderLayout.NORTH);
+        radiusPanel.add(radiusSlider, java.awt.BorderLayout.CENTER);
+        mainPanel.add(radiusPanel, java.awt.BorderLayout.WEST);
+
+        // ── 투명도 슬라이더 (수직, East) ─────────────────────────
+        int initOpacity = Math.round(host.getOpacity() * 100);
+        javax.swing.JSlider opacitySlider = new javax.swing.JSlider(
+            javax.swing.JSlider.VERTICAL, 30, 100, initOpacity);
+        opacitySlider.setMajorTickSpacing(10);
+        opacitySlider.setMinorTickSpacing(5);
+        opacitySlider.setPaintTicks(true);
+        opacitySlider.setPaintLabels(true);
+        opacitySlider.setInverted(false); // 위쪽이 100%, 아래쪽이 30%
+        javax.swing.JLabel opacityLabel = new javax.swing.JLabel(initOpacity + "%");
+        opacityLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        opacitySlider.addChangeListener(ev ->
+            opacityLabel.setText(opacitySlider.getValue() + "%"));
+        JPanel opacityPanel = new JPanel(new java.awt.BorderLayout(2, 4));
+        opacityPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("투명도"));
+        opacityPanel.add(opacityLabel,  java.awt.BorderLayout.NORTH);
+        opacityPanel.add(opacitySlider, java.awt.BorderLayout.CENTER);
+        mainPanel.add(opacityPanel, java.awt.BorderLayout.EAST);
+
+        // ── 다이얼로그 ───────────────────────────────────────────
+        javax.swing.JDialog dlg = new javax.swing.JDialog(
+            (java.awt.Frame) javax.swing.SwingUtilities.getWindowAncestor(host.getOwnerComponent()),
+            "컬러 조정", true);
+        dlg.setAlwaysOnTop(true);
+
+        JButton okBtn     = new JButton("적용");
+        JButton cancelBtn = new JButton("Cancel");
+        JButton resetBtn  = new JButton("Reset");
+        JButton confirmBtn = new JButton("확인");
+
+        // Reset: 선택된 항목 색상을 기본값으로
+        resetBtn.addActionListener(e -> {
+            for (int i = 0; i < radios.length; i++) {
+                if (radios[i].isSelected()) {
+                    if (i == 6) break; // 배경 초기화는 Reset 불필요
+                    Color def;
+                    switch (i) {
+                        case 0: def = Color.WHITE; break;
+                        case 1: def = host.getTheme().equals("Black") ? Color.WHITE : Color.BLACK; break;
+                        case 2: def = Color.BLACK; break;
+                        case 7: def = host.getTheme().equals("Black") ? Color.WHITE : Color.BLACK; break;
+                        default: def = Color.BLACK; break;
+                    }
+                    currentColors[i] = def;
+                    chooser.setColor(def);
+                    break;
+                }
+            }
+        });
+
+        // chooser 색상 변경 시 currentColors 실시간 반영 (배경초기화 제외)
+        chooser.getSelectionModel().addChangeListener(ev -> {
+            for (int i = 0; i < radios.length; i++) {
+                if (radios[i].isSelected() && i != 6) { currentColors[i] = chooser.getColor(); break; }
+            }
+        });
+
+        okBtn.addActionListener(e -> {
+            // 선택된 항목만 적용
+            for (int i = 0; i < radios.length; i++) {
+                if (!radios[i].isSelected()) continue;
+                switch (i) {
+                    case 0: // 내부 배경
+                        host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera();
+                        host.stopItsCctv(); host.stopYoutube();
+                        host.setGalaxyMode(false); host.setMatrixMode(false);
+                        host.setMatrix2Mode(false); host.setMatrix3Mode(false);
+                        host.setRainMode(false); host.setSnowMode(false);
+                        host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false);
+                        host.setBgImage("", null); host.setBgColor(currentColors[0]);
+                        break;
+                    case 1: host.setTickColor(currentColors[1]);   break;
+                    case 2: host.setBorderColor(currentColors[2]);  break;
+                    case 3: host.setHourColor(currentColors[3]);    break;
+                    case 4: host.setMinuteColor(currentColors[4]);  break;
+                    case 5: host.setSecondColor(currentColors[5]);  break;
+                    case 6: // 배경 초기화 (Marble)
+                        host.stopSlideTimer(); host.stopShowTimer(); host.stopCamera();
+                        host.stopItsCctv(); host.stopYoutube();
+                        host.setGalaxyMode(false); host.setMatrixMode(false);
+                        host.setMatrix2Mode(false); host.setMatrix3Mode(false);
+                        host.setRainMode(false); host.setSnowMode(false);
+                        host.setFireMode(false); host.setSparkleMode(false); host.setBubbleMode(false);
+                        host.setBgImage("", null); host.setBgColor(null);
+                        break;
+                    case 7: host.setNumberColor(currentColors[7]); break;
+                }
+                break;
+            }
+            // Neon은 체크박스이므로 항상 반영
+            host.setNeonMode(neonCheck.isSelected());
+            // 투명도 항상 반영
+            host.setOpacity(opacitySlider.getValue() / 100f);
+            // 반지름 반영
+            int newR = radiusSlider.getValue();
+            if (newR != host.getRadius()) host.adjustRadius(newR - host.getRadius());
+            host.saveConfig();
+            host.repaintClock();
+            // 다이얼로그 유지
+        });
+        confirmBtn.addActionListener(e -> dlg.dispose());
+        cancelBtn.addActionListener(e -> dlg.dispose());
+
+        JPanel btnPanel = new JPanel();
+        btnPanel.add(okBtn);
+        btnPanel.add(confirmBtn);
+        btnPanel.add(cancelBtn);
+        btnPanel.add(resetBtn);
+
+        dlg.getContentPane().setLayout(new java.awt.BorderLayout(8, 8));
+        dlg.getContentPane().add(mainPanel, java.awt.BorderLayout.CENTER);
+        dlg.getContentPane().add(btnPanel,  java.awt.BorderLayout.SOUTH);
+        dlg.pack();
+        dlg.setLocationRelativeTo(host.getOwnerComponent());
+        dlg.setVisible(true);
+    }
+
     // ── Always On Top ────────────────────────────────────────────
     private JCheckBoxMenuItem buildAlwaysOnTopItem() {
         JCheckBoxMenuItem aot = new JCheckBoxMenuItem("Always On Top", host.isAlwaysOnTop());
@@ -1817,6 +2028,7 @@ public class MenuBuilder {
         menu.add(buildCalendarQueryItem("📅 [구글] 향후 3일 조회",   "next3"));
         menu.add(buildCalendarQueryItem("📅 [구글] 향후 7일 조회",   "next7"));
         menu.add(buildCalendarQueryItem("📅 [구글] 한달 일정 조회",  "month"));
+        menu.add(buildCalendarQueryItem("📅 [구글] 다음달 일정 조회", "nextmonth"));
         menu.add(buildCalendarQueryItem("📅 [구글] 지난 7일 조회",   "past7"));
 		
         menu.addSeparator();
@@ -1827,6 +2039,7 @@ public class MenuBuilder {
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 향후 3일 조회",   "next3"));
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 향후 7일 조회",   "next7"));
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 한달 일정 조회",  "month"));
+        menu.add(buildNaverCalendarQueryItem("📅 [네이버] 다음달 일정 조회", "nextmonth"));
         menu.add(buildNaverCalendarQueryItem("📅 [네이버] 지난 7일 조회",   "past7"));
 
         menu.addSeparator();
@@ -1881,6 +2094,10 @@ public class MenuBuilder {
                         case "month":
 						events = cal.getThisMonth();
 						title  = "이번 달 일정";
+						break;
+                        case "nextmonth":
+						events = cal.getNextMonth();
+						title  = "다음 달 일정";
 						break;
                         case "past7":
 						events = cal.getPastDays(7);
@@ -2041,6 +2258,10 @@ public class MenuBuilder {
                         case "month":
 						events = naver.getThisMonth();
 						title  = "네이버 이번 달 일정";
+						break;
+                        case "nextmonth":
+						events = naver.getNextMonth();
+						title  = "네이버 다음 달 일정";
 						break;
                         case "past7":
 						events = naver.getPastDays(7);
@@ -2460,6 +2681,8 @@ public class MenuBuilder {
         // ── 액션 위임 ───────────────────────────────────────
         @Override public void repaintClock()        { app.clockPanel.repaint(); }
         @Override public void repackAndKeepCenter() { app.repackAndKeepCenter(); }
+        @Override public int  getRadius()           { return app.clockPanel.getRadius(); }
+        @Override public void adjustRadius(int d)   { app.clockPanel.adjustRadius(d); app.repackAndKeepCenter(); app.saveConfig(); }
         @Override public void saveConfig()          { app.saveConfig(); }
         @Override public void startShowTimer()      { app.startShowTimer(); }
         @Override public void stopShowTimer()       { app.stopShowTimer(); }

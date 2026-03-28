@@ -488,7 +488,8 @@ public class TelegramBot {
                     {"향후 3일", "ms_3"},
                     {"향후 7일", "ms_7"},
                     {"지난 7일", "ms_week"},
-                    {"이번 달",  "ms_month"}
+                    {"이번 달",  "ms_month"},
+                    {"다음 달",  "ms_nextmonth"}
                 });
             return;
         }
@@ -527,6 +528,11 @@ public class TelegramBot {
                         events = calendarService.getThisMonth();
                         title  = "이번 달 일정";
                         break;
+                    case "nextmonth":
+                    case "다음달":
+                        events = calendarService.getNextMonth();
+                        title  = "다음 달 일정";
+                        break;
                     default:
                         try {
                             int days = Integer.parseInt(arg);
@@ -564,7 +570,8 @@ public class TelegramBot {
                     {"향후 3일", "ns_3"},
                     {"향후 7일", "ns_7"},
                     {"지난 7일", "ns_week"},
-                    {"이번 달",  "ns_month"}
+                    {"이번 달",  "ns_month"},
+                    {"다음 달",  "ns_nextmonth"}
                 });
             return;
         }
@@ -603,6 +610,11 @@ public class TelegramBot {
                         events = naverCalendarService.getThisMonth();
                         title  = "네이버 이번 달 일정";
                         break;
+                    case "nextmonth":
+                    case "다음달":
+                        events = naverCalendarService.getNextMonth();
+                        title  = "네이버 다음 달 일정";
+                        break;
                     default:
                         try {
                             int days = Integer.parseInt(arg);
@@ -629,6 +641,7 @@ public class TelegramBot {
             case "ms_tomorrow": fetchAndSendSchedule(chatId, "tomorrow"); break;
             case "ms_week":     fetchAndSendSchedule(chatId, "week");     break;
             case "ms_month":    fetchAndSendSchedule(chatId, "month");    break;
+            case "ms_nextmonth":fetchAndSendSchedule(chatId, "nextmonth");break;
             case "ms_3":        fetchAndSendSchedule(chatId, "3");        break;
             case "ms_7":        fetchAndSendSchedule(chatId, "7");        break;
             // 네이버 캘린더
@@ -636,6 +649,7 @@ public class TelegramBot {
             case "ns_tomorrow": fetchAndSendNaverSchedule(chatId, "tomorrow"); break;
             case "ns_week":     fetchAndSendNaverSchedule(chatId, "week");     break;
             case "ns_month":    fetchAndSendNaverSchedule(chatId, "month");    break;
+            case "ns_nextmonth":fetchAndSendNaverSchedule(chatId, "nextmonth");break;
             case "ns_3":        fetchAndSendNaverSchedule(chatId, "3");        break;
             case "ns_7":        fetchAndSendNaverSchedule(chatId, "7");        break;
             default:

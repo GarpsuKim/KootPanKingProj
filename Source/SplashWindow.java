@@ -140,6 +140,9 @@ public class SplashWindow extends JFrame {
 
         /** 오류 신고 메일 발송용 GmailSender 접근 */
         GmailSender getGmail();
+
+        /** 시계 창을 현재 모니터 우상단으로 이동 */
+        void moveToTopRight();
 	}
     // ═══════════════════════════════════════════════════════════
     //  생성자
@@ -1224,12 +1227,45 @@ public class SplashWindow extends JFrame {
 	
 	// SplashWindow.java 내 doUpgrade() 메서드
 	private void doUpgradeNew() {
-		int confirm = JOptionPane.showConfirmDialog(this,
-			"GitHub 에서 최신 버전을 다운로드하는 배치 파일을 실행합니다.\n\n"
-			+ "배치 파일 실행 후 이 프로그램은 자동으로 종료됩니다.\n\n"
-			+ "계속하시겠습니까?",
-		"프로그램 업그레이드", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-		if (confirm != JOptionPane.YES_OPTION) return;
+		// ── 시계를 모니터 우상단으로 이동 ────────────────────────
+		if (clockHost != null) clockHost.moveToTopRight();
+
+		// ── 15초 카운트다운 확인 다이얼로그 ──────────────────────
+		JLabel msgLabel = new JLabel("<html>"
+			+ "GitHub 에서 최신 버전을 다운로드하는 배치 파일을 실행합니다.<br><br>"
+			+ "배치 파일 실행 후 이 프로그램은 자동으로 종료됩니다.<br><br>"
+			+ "계속하시겠습니까?"
+			+ "</html>");
+		JButton yesBtn = new JButton("예");
+		JButton noBtn  = new JButton("아니오");
+		JPanel btnPanel = new JPanel();
+		btnPanel.add(yesBtn); btnPanel.add(noBtn);
+		JPanel root = new JPanel(new BorderLayout(0, 8));
+		root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+		root.add(msgLabel, BorderLayout.CENTER);
+		root.add(btnPanel, BorderLayout.SOUTH);
+
+		JDialog dlg = new JDialog(this, "프로그램 업그레이드", true);
+		dlg.setContentPane(root);
+		dlg.pack();
+		dlg.setLocationRelativeTo(null);
+		dlg.setAlwaysOnTop(true);
+
+		final int[] sec = { 15 };
+		final boolean[] confirmed = { false };
+		javax.swing.Timer countdown = new javax.swing.Timer(1000, null);
+		countdown.addActionListener(e -> {
+			sec[0]--;
+			dlg.setTitle("프로그램 업그레이드  — " + sec[0] + "초 후 취소");
+			if (sec[0] <= 0) { countdown.stop(); dlg.dispose(); }
+		});
+		countdown.start();
+
+		yesBtn.addActionListener(e -> { confirmed[0] = true;  countdown.stop(); dlg.dispose(); });
+		noBtn .addActionListener(e -> { confirmed[0] = false; countdown.stop(); dlg.dispose(); });
+
+		dlg.setVisible(true);  // modal 블로킹
+		if (!confirmed[0]) return;
 		
 		new Thread(() -> {
 			try {

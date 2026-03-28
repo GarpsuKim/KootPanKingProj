@@ -159,6 +159,16 @@ public class NaverCalendarService {
 			System.out.println("[NaverCal] 이번달 일정 조회 중...");
 			return getEvents(start, end);
 		}
+
+		public List<CalendarEvent> getNextMonth() {
+			LocalDate today    = LocalDate.now();
+			LocalDate firstDay = today.withDayOfMonth(1).plusMonths(1);
+			LocalDate lastDay  = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+			ZonedDateTime start = firstDay.atStartOfDay(ZoneId.systemDefault());
+			ZonedDateTime end   = lastDay.atTime(23, 59, 59).atZone(ZoneId.systemDefault());
+			System.out.println("[NaverCal] 다음달 일정 조회 중...");
+			return getEvents(start, end);
+		}
 		
 		public List<CalendarEvent> getUpcomingAlarms(int withinMinutes) {
 			ZonedDateTime now = ZonedDateTime.now();

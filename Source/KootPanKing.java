@@ -767,6 +767,7 @@ public class KootPanKing extends JFrame {
 				dragOrigin[0] = null;
 			}
             @Override public void mouseReleased(MouseEvent e) {
+                if (dragOrigin[0] != null) saveConfig(); // 드래그 이동 후 위치 저장
                 dragOrigin[0] = null;
 			}
 			/*
@@ -2083,7 +2084,7 @@ public class KootPanKing extends JFrame {
 	}
 
     /** 시계를 화면 오른쪽 상단으로 이동 */
-    private void moveToTopRight() {
+    void moveToTopRight() {
         Toolkit tk = Toolkit.getDefaultToolkit();
         Dimension screen = tk.getScreenSize();
         GraphicsConfiguration gc = getGraphicsConfiguration();
@@ -3060,6 +3061,9 @@ public class KootPanKing extends JFrame {
 				clock.saveConfig(); // 파일 I/O 1회
 			}
 			@Override public GmailSender getGmail() { return clock.gmail; }
+			@Override public void moveToTopRight() {
+				SwingUtilities.invokeLater(() -> clock.moveToTopRight());
+			}
 		});
         splash.log("시계 초기화 완료.");
         splash.setStatus("실행 중");
