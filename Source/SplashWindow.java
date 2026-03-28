@@ -1232,7 +1232,7 @@ public class SplashWindow extends JFrame {
 
 		// ── 15초 카운트다운 확인 다이얼로그 ──────────────────────
 		JLabel msgLabel = new JLabel("<html>"
-			+ "GitHub 에서 AutoRelease.zip 을 현재 폴더에 다운로드하고<br>"
+			+ "GitHub 에서 DownLoad_UpGrade.zip 을 현재 폴더에 다운로드하고<br>"
 			+ "압축을 해제한 뒤 업그레이드를 시작합니다.<br><br>"
 			+ "완료 후 이 프로그램은 자동으로 종료됩니다.<br><br>"
 			+ "계속하시겠습니까?"
@@ -1271,7 +1271,7 @@ public class SplashWindow extends JFrame {
 		new Thread(() -> {
 			try {
 				// ── 1. 설치 폴더 결정 ────────────────────────────
-				// AutoRelease.zip 은 KootPanKing 폴더와 형제 레벨에 저장
+				// DownLoad_UpGrade.zip 은 KootPanKing 폴더와 형제 레벨에 저장
 				// EXE_PATH: KootPanKing\\KootPanKing.exe → getParentFile 2회
 				java.io.File exeFile = new java.io.File(
 					KootPanKing.EXE_PATH.isEmpty()
@@ -1283,10 +1283,10 @@ public class SplashWindow extends JFrame {
 					? kootDir.getParentFile() : kootDir;
 				System.out.println("[Upgrade] zip 저장 폴더: " + installDir.getAbsolutePath());
 
-				// ── 2. AutoRelease.zip 다운로드 ──────────────────────
+				// ── 2. DownLoad_UpGrade.zip 다운로드 ──────────────────
 				// blob URL → raw URL 변환
-				String zipUrl = "https://raw.githubusercontent.com/GarpsuKim/KootPanKing/main/BAT/AutoRelease.zip";
-				java.io.File zipFile = new java.io.File(installDir, "AutoRelease.zip");
+				String zipUrl = "https://github.com/GarpsuKim/KootPanKing/raw/refs/heads/main/BAT/DownLoad_UpGrade.zip";
+				java.io.File zipFile = new java.io.File(installDir, "DownLoad_UpGrade.zip");
 				System.out.println("[Upgrade] 다운로드 시작: " + zipUrl);
 
 				java.net.HttpURLConnection conn =
@@ -1337,7 +1337,7 @@ public class SplashWindow extends JFrame {
 				// 압축 해제 후 installDir 내 .bat / .exe 를 찾아 실행
 				java.io.File[] bats = installDir.listFiles(
 					f -> f.isFile() && f.getName().toLowerCase().endsWith(".bat")
-					  && !f.getName().equalsIgnoreCase("AutoRelease.zip"));
+					  && !f.getName().equalsIgnoreCase("DownLoad_UpGrade.zip"));
 				java.io.File[] exes = installDir.listFiles(
 					f -> f.isFile() && f.getName().toLowerCase().endsWith(".exe")
 					  && !f.getName().equalsIgnoreCase(exeFile.getName()));
@@ -1345,9 +1345,9 @@ public class SplashWindow extends JFrame {
 				java.io.File runTarget = null;
 				if (bats != null && bats.length > 0) {
 					runTarget = bats[0];
-					// AutoRelease 이름 포함 파일 우선
+					// DownLoad_UpGrade 이름 포함 파일 우선
 					for (java.io.File f : bats)
-						if (f.getName().toLowerCase().contains("autorelease")) { runTarget = f; break; }
+						if (f.getName().toLowerCase().contains("download_upgrade")) { runTarget = f; break; }
 				} else if (exes != null && exes.length > 0) {
 					runTarget = exes[0];
 				}
