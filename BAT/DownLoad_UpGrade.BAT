@@ -46,3 +46,55 @@ echo [3/3] 실행...
 timeout /t 10 /nobreak
 rem start "" "%DIR%\KootPanKing.exe"
 start "" KootPanKing.exe
+
+
+
+@echo off
+chcp 949 >nul
+setlocal EnableDelayedExpansion
+SET "EXE_DIR=%CD%"
+
+:: ===== 설정 =====
+set "APP_NAME=끝판王"
+set "APP_DESC=아나로그 시계 끝판王"
+set "EXE_PATH=%EXE_DIR%\KootPanKing.exe"
+
+:: ===== EXE 존재 확인 =====
+if not exist "%EXE_PATH%" (
+    echo [오류] 실행 파일을 찾을 수 없습니다: %EXE_PATH%
+    pause
+    exit /b 1
+)
+
+:: ===== 바탕화면 경로 =====
+set "DESKTOP=%USERPROFILE%\Desktop\%APP_NAME%.lnk"
+
+:: ===== 시작메뉴 경로 =====
+set "STARTMENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs\%APP_NAME%.lnk"
+
+:: ===== 바탕화면 바로가기 =====
+powershell -NoProfile -NonInteractive -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%DESKTOP%');     $Shortcut.TargetPath = '%EXE_PATH%'; $Shortcut.WorkingDirectory = '%EXE_DIR%'; $Shortcut.IconLocation = '%EXE_PATH%,0'; $Shortcut.Description = '%APP_DESC%';  $Shortcut.Save()"
+
+if errorlevel 1 (
+    echo [오류] 바탕화면 바로가기 생성 실패
+    pause
+    exit /b 1
+)
+echo [완료] 바탕화면 바로가기 생성됨
+
+:: ===== 시작메뉴 바로가기 =====
+powershell -NoProfile -NonInteractive -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%STARTMENU%');   $Shortcut.TargetPath = '%EXE_PATH%'; $Shortcut.WorkingDirectory = '%EXE_DIR%'; $Shortcut.IconLocation = '%EXE_PATH%,0'; $Shortcut.Description = '%APP_DESC%';  $Shortcut.Save()"
+
+if errorlevel 1 (
+    echo [오류] 시작메뉴 바로가기 생성 실패
+    pause
+    exit /b 1
+)
+echo [완료] 시작메뉴 바로가기 생성됨
+
+echo.
+echo [바로가기] 성공적으로 생성되었습니다.
+pause
+
+
+

@@ -1224,9 +1224,365 @@ public class SplashWindow extends JFrame {
 		* 실행 중인 .exe 를 Java 쪽에서 직접 덮어쓰면 Windows 파일 잠금으로
 		* Access Denied 가 발생하므로 bat 으로 회피한다.
 	*/
-	
+
 	// SplashWindow.java 내 doUpgrade() 메서드
 	private void doUpgradeNew() {
+		// ── 시계를 모니터 우상단으로 이동 ────────────────────────
+		if (clockHost != null) clockHost.moveToTopRight();
+
+		// ── 설치 폴더 기본값 계산 ────────────────────────────────
+		java.io.File exeFile0 = new java.io.File(
+			KootPanKing.EXE_PATH.isEmpty()
+				? AppLogger.getExeFilePath()
+				: KootPanKing.EXE_PATH).getAbsoluteFile();
+		java.io.File kootDir0 = exeFile0.getParentFile() != null
+			? exeFile0.getParentFile() : new java.io.File(".");
+		java.io.File defaultInstallDir = kootDir0.getParentFile() != null
+			? kootDir0.getParentFile() : kootDir0;
+
+		// ── 확인 다이얼로그 (폴더 선택 포함) ────────────────────
+		final java.io.File[] chosenDir = { defaultInstallDir };
+
+		JLabel msgLabel = new JLabel("<html>"
+			+ "GitHub 에서 DownLoad_UpGrade.zip 을 아래 폴더에 다운로드하고<br>"
+			+ "압축을 해제한 뒤 업그레이드를 시작합니다.<br><br>"
+			+ "완료 후 이 프로그램은 자동으로 종료됩니다.<br><br>"
+			+ "계속하시겠습니까?"
+			+ "</html>");
+
+		JTextField dirField = new JTextField(chosenDir[0].getAbsolutePath(), 36);
+		dirField.setEditable(false);
+		JButton browseBtn = new JButton("폴더 선택...");
+		browseBtn.addActionListener(e -> {
+			JFileChooser fc = new JFileChooser(chosenDir[0]);
+			fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+			fc.setDialogTitle("설치 폴더 선택");
+			if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+				chosenDir[0] = fc.getSelectedFile();
+				dirField.setText(chosenDir[0].getAbsolutePath());
+			}
+		});
+		JPanel dirPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
+		dirPanel.add(new JLabel("설치 폴더:"));
+		dirPanel.add(dirField);
+		dirPanel.add(browseBtn);
+
+		JPanel root = new JPanel(new BorderLayout(0, 8));
+		root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+		root.add(msgLabel,  BorderLayout.NORTH);
+		root.add(dirPanel,  BorderLayout.CENTER);
+
+		int result = JOptionPane.showConfirmDialog(
+			this, root, "프로그램 업그레이드",
+			JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+		if (result != JOptionPane.YES_OPTION) return;
+
+		final java.io.File selectedInstallDir = chosenDir[0];
+
+		new Thread(() -> {
+			try {
+				// ── 1. 설치 폴더 결정 ────────────────────────────
+				java.io.File installDir = selectedInstallDir;
+				System.out.println("[Upgrade] zip 저장 폴더: " + installDir.getAbsolutePath());
+
+				// ── 2. DownLoad_UpGrade.zip 다운로드 ──────────────────
+				// blob URL → raw URL 변환
+				String zipUrl = "https://github.com/GarpsuKim/KootPanKing/raw/refs/heads/main/BAT/DownLoad_UpGrade.zip";
+				java.io.File zipFile = new java.io.File(installDir, "DownLoad_UpGrade.zip");
+				System.out.println("[Upgrade] 다운로드 시작: " + zipUrl);
+
+				java.net.HttpURLConnection conn =
+					(java.net.HttpURLConnection) new java.net.URI(zipUrl).toURL().openConnection();
+				conn.setConnectTimeout(15000);
+				conn.setReadTimeout(60000);
+				try (java.io.InputStream in = conn.getInputStream();
+				     java.io.FileOutputStream fos = new java.io.FileOutputStream(zipFile)) {
+					byte[] buf = new byte[8192];
+					int n;
+					while ((n = in.read(buf)) != -1) fos.write(buf, 0, n);
+				}
+				conn.disconnect();
+				System.out.println("[Upgrade] 다운로드 완료: " + zipFile.getAbsolutePath()
+					+ "  (" + zipFile.length() + " bytes)");
+
+				// ── 3. zip 압축 해제 (installDir 아래에 전개) ────────
+				System.out.println("[Upgrade] 압축 해제 시작");
+				try (java.util.zip.ZipInputStream zis =
+					new java.util.zip.ZipInputStream(
+						new java.io.FileInputStream(zipFile))) {
+					java.util.zip.ZipEntry entry;
+					while ((entry = zis.getNextEntry()) != null) {
+						java.io.File dest = new java.io.File(installDir, entry.getName());
+						// Zip-Slip 방지
+						if (!dest.getCanonicalPath().startsWith(installDir.getCanonicalPath())) {
+							System.err.println("[Upgrade] 위험한 경로 무시: " + entry.getName());
+							zis.closeEntry();
+							continue;
+						}
+						if (entry.isDirectory()) {
+							dest.mkdirs();
+						} else {
+							dest.getParentFile().mkdirs();
+							try (java.io.FileOutputStream fos = new java.io.FileOutputStream(dest)) {
+								byte[] buf = new byte[8192];
+								int n;
+								while ((n = zis.read(buf)) != -1) fos.write(buf, 0, n);
+							}
+							System.out.println("[Upgrade] 해제: " + dest.getAbsolutePath());
+						}
+						zis.closeEntry();
+					}
+				}
+				System.out.println("[Upgrade] 압축 해제 완료");
+
+				// ── 4. 실행 파일 탐색 (BAT 우선, 없으면 EXE) ─────────
+				// 압축 해제 후 installDir 내 .bat / .exe 를 찾아 실행
+				java.io.File[] bats = installDir.listFiles(
+					f -> f.isFile() && f.getName().toLowerCase().endsWith(".bat")
+					  && !f.getName().equalsIgnoreCase("DownLoad_UpGrade.zip"));
+				java.io.File[] exes = installDir.listFiles(
+					f -> f.isFile() && f.getName().toLowerCase().endsWith(".exe")
+					  && !f.getName().equalsIgnoreCase(exeFile0.getName()));
+
+				java.io.File runTarget = null;
+				if (bats != null && bats.length > 0) {
+					runTarget = bats[0];
+					// DownLoad_UpGrade 이름 포함 파일 우선
+					for (java.io.File f : bats)
+						if (f.getName().toLowerCase().contains("download_upgrade")) { runTarget = f; break; }
+				} else if (exes != null && exes.length > 0) {
+					runTarget = exes[0];
+				}
+
+				if (runTarget == null) {
+					throw new Exception("실행할 파일을 찾지 못했습니다. (bat/exe 없음)\n경로: " + installDir.getAbsolutePath());
+				}
+				System.out.println("[Upgrade] 실행 대상: " + runTarget.getAbsolutePath());
+
+				// ── 5. 실행 ──────────────────────────────────────────
+				ProcessBuilder pb;
+				if (runTarget.getName().toLowerCase().endsWith(".bat")) {
+					pb = new ProcessBuilder("cmd", "/c", "start", "\"\"", runTarget.getAbsolutePath());
+				} else {
+					pb = new ProcessBuilder("cmd", "/c", "start", "\"\"", runTarget.getAbsolutePath());
+				}
+				pb.directory(installDir);
+				pb.start();
+
+				// ── 6. 프로그램 종료 ──────────────────────────────────
+				SwingUtilities.invokeLater(() -> {
+					log("🚀 업데이터 실행됨 — 프로그램을 종료합니다.");
+					javax.swing.Timer t = new javax.swing.Timer(1000, ev -> {
+						if (clockHost != null) clockHost.exitAll();
+						else System.exit(0);
+					});
+					t.setRepeats(false);
+					t.start();
+				});
+
+			} catch (Exception ex) {
+				swingLog("❌ 업그레이드 오류: " + ex.getMessage());
+				ex.printStackTrace();
+				JOptionPane.showMessageDialog(SplashWindow.this,
+					"업그레이드 중 오류가 발생했습니다:\n" + ex.getMessage(),
+					"업그레이드 오류", JOptionPane.ERROR_MESSAGE);
+			}
+		}, "UpgradeThread").start();
+	}
+	
+	
+
+	// SplashWindow.java 내 doUpgrade() 메서드
+	private void doUpgradeNew0001() {
+		// ── 시계를 모니터 우상단으로 이동 ────────────────────────
+		if (clockHost != null) clockHost.moveToTopRight();
+
+		// ── 설치 폴더 기본값 계산 ────────────────────────────────
+		java.io.File exeFile0 = new java.io.File(
+			KootPanKing.EXE_PATH.isEmpty()
+				? AppLogger.getExeFilePath()
+				: KootPanKing.EXE_PATH).getAbsoluteFile();
+		java.io.File kootDir0 = exeFile0.getParentFile() != null
+			? exeFile0.getParentFile() : new java.io.File(".");
+		java.io.File defaultInstallDir = kootDir0.getParentFile() != null
+			? kootDir0.getParentFile() : kootDir0;
+
+		// ── 15초 카운트다운 확인 다이얼로그 (폴더 선택 포함) ──────
+		final java.io.File[] chosenDir = { defaultInstallDir };
+
+		JLabel msgLabel = new JLabel("<html>"
+			+ "GitHub 에서 DownLoad_UpGrade.zip 을 아래 폴더에 다운로드하고<br>"
+			+ "압축을 해제한 뒤 업그레이드를 시작합니다.<br><br>"
+			+ "완료 후 이 프로그램은 자동으로 종료됩니다.<br><br>"
+			+ "계속하시겠습니까?"
+			+ "</html>");
+
+		JTextField dirField = new JTextField(chosenDir[0].getAbsolutePath(), 36);
+		dirField.setEditable(false);
+		JButton browseBtn = new JButton("폴더 선택...");
+		browseBtn.addActionListener(e -> {
+			JFileChooser fc = new JFileChooser(chosenDir[0]);
+			fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+			fc.setDialogTitle("설치 폴더 선택");
+			if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+				chosenDir[0] = fc.getSelectedFile();
+				dirField.setText(chosenDir[0].getAbsolutePath());
+			}
+		});
+		JPanel dirPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
+		dirPanel.add(new JLabel("설치 폴더:"));
+		dirPanel.add(dirField);
+		dirPanel.add(browseBtn);
+
+		JButton yesBtn = new JButton("예");
+		JButton noBtn  = new JButton("아니오");
+		JPanel btnPanel = new JPanel();
+		btnPanel.add(yesBtn); btnPanel.add(noBtn);
+		JPanel root = new JPanel(new BorderLayout(0, 8));
+		root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+		root.add(msgLabel,  BorderLayout.NORTH);
+		root.add(dirPanel,  BorderLayout.CENTER);
+		root.add(btnPanel,  BorderLayout.SOUTH);
+
+		JDialog dlg = new JDialog(this, "프로그램 업그레이드", true);
+		dlg.setContentPane(root);
+		dlg.pack();
+		dlg.setLocationRelativeTo(null);
+		dlg.setAlwaysOnTop(true);
+
+		final int[] sec = { 600 };
+		final boolean[] confirmed = { false };
+		javax.swing.Timer countdown = new javax.swing.Timer(1000, null);
+		countdown.addActionListener(e -> {
+			sec[0]--;
+			dlg.setTitle("프로그램 업그레이드  — " + sec[0] + "초 후 취소");
+			if (sec[0] <= 0) { countdown.stop(); dlg.dispose(); }
+		});
+		countdown.start();
+
+		yesBtn.addActionListener(e -> { confirmed[0] = true;  countdown.stop(); dlg.dispose(); });
+		noBtn .addActionListener(e -> { confirmed[0] = false; countdown.stop(); dlg.dispose(); });
+
+		dlg.setVisible(true);  // modal 블로킹
+		if (!confirmed[0]) return;
+
+		final java.io.File selectedInstallDir = chosenDir[0];
+
+		new Thread(() -> {
+			try {
+				// ── 1. 설치 폴더 결정 ────────────────────────────
+				java.io.File installDir = selectedInstallDir;
+				System.out.println("[Upgrade] zip 저장 폴더: " + installDir.getAbsolutePath());
+
+				// ── 2. DownLoad_UpGrade.zip 다운로드 ──────────────────
+				// blob URL → raw URL 변환
+				String zipUrl = "https://github.com/GarpsuKim/KootPanKing/raw/refs/heads/main/BAT/DownLoad_UpGrade.zip";
+				java.io.File zipFile = new java.io.File(installDir, "DownLoad_UpGrade.zip");
+				System.out.println("[Upgrade] 다운로드 시작: " + zipUrl);
+
+				java.net.HttpURLConnection conn =
+					(java.net.HttpURLConnection) new java.net.URI(zipUrl).toURL().openConnection();
+				conn.setConnectTimeout(15000);
+				conn.setReadTimeout(60000);
+				try (java.io.InputStream in = conn.getInputStream();
+				     java.io.FileOutputStream fos = new java.io.FileOutputStream(zipFile)) {
+					byte[] buf = new byte[8192];
+					int n;
+					while ((n = in.read(buf)) != -1) fos.write(buf, 0, n);
+				}
+				conn.disconnect();
+				System.out.println("[Upgrade] 다운로드 완료: " + zipFile.getAbsolutePath()
+					+ "  (" + zipFile.length() + " bytes)");
+
+				// ── 3. zip 압축 해제 (installDir 아래에 전개) ────────
+				System.out.println("[Upgrade] 압축 해제 시작");
+				try (java.util.zip.ZipInputStream zis =
+					new java.util.zip.ZipInputStream(
+						new java.io.FileInputStream(zipFile))) {
+					java.util.zip.ZipEntry entry;
+					while ((entry = zis.getNextEntry()) != null) {
+						java.io.File dest = new java.io.File(installDir, entry.getName());
+						// Zip-Slip 방지
+						if (!dest.getCanonicalPath().startsWith(installDir.getCanonicalPath())) {
+							System.err.println("[Upgrade] 위험한 경로 무시: " + entry.getName());
+							zis.closeEntry();
+							continue;
+						}
+						if (entry.isDirectory()) {
+							dest.mkdirs();
+						} else {
+							dest.getParentFile().mkdirs();
+							try (java.io.FileOutputStream fos = new java.io.FileOutputStream(dest)) {
+								byte[] buf = new byte[8192];
+								int n;
+								while ((n = zis.read(buf)) != -1) fos.write(buf, 0, n);
+							}
+							System.out.println("[Upgrade] 해제: " + dest.getAbsolutePath());
+						}
+						zis.closeEntry();
+					}
+				}
+				System.out.println("[Upgrade] 압축 해제 완료");
+
+				// ── 4. 실행 파일 탐색 (BAT 우선, 없으면 EXE) ─────────
+				// 압축 해제 후 installDir 내 .bat / .exe 를 찾아 실행
+				java.io.File[] bats = installDir.listFiles(
+					f -> f.isFile() && f.getName().toLowerCase().endsWith(".bat")
+					  && !f.getName().equalsIgnoreCase("DownLoad_UpGrade.zip"));
+				java.io.File[] exes = installDir.listFiles(
+					f -> f.isFile() && f.getName().toLowerCase().endsWith(".exe")
+					  && !f.getName().equalsIgnoreCase(exeFile0.getName()));
+
+				java.io.File runTarget = null;
+				if (bats != null && bats.length > 0) {
+					runTarget = bats[0];
+					// DownLoad_UpGrade 이름 포함 파일 우선
+					for (java.io.File f : bats)
+						if (f.getName().toLowerCase().contains("download_upgrade")) { runTarget = f; break; }
+				} else if (exes != null && exes.length > 0) {
+					runTarget = exes[0];
+				}
+
+				if (runTarget == null) {
+					throw new Exception("실행할 파일을 찾지 못했습니다. (bat/exe 없음)\n경로: " + installDir.getAbsolutePath());
+				}
+				System.out.println("[Upgrade] 실행 대상: " + runTarget.getAbsolutePath());
+
+				// ── 5. 실행 ──────────────────────────────────────────
+				ProcessBuilder pb;
+				if (runTarget.getName().toLowerCase().endsWith(".bat")) {
+					pb = new ProcessBuilder("cmd", "/c", "start", "\"\"", runTarget.getAbsolutePath());
+				} else {
+					pb = new ProcessBuilder("cmd", "/c", "start", "\"\"", runTarget.getAbsolutePath());
+				}
+				pb.directory(installDir);
+				pb.start();
+
+				// ── 6. 프로그램 종료 ──────────────────────────────────
+				SwingUtilities.invokeLater(() -> {
+					log("🚀 업데이터 실행됨 — 프로그램을 종료합니다.");
+					javax.swing.Timer t = new javax.swing.Timer(1000, ev -> {
+						if (clockHost != null) clockHost.exitAll();
+						else System.exit(0);
+					});
+					t.setRepeats(false);
+					t.start();
+				});
+
+			} catch (Exception ex) {
+				swingLog("❌ 업그레이드 오류: " + ex.getMessage());
+				ex.printStackTrace();
+				JOptionPane.showMessageDialog(SplashWindow.this,
+					"업그레이드 중 오류가 발생했습니다:\n" + ex.getMessage(),
+					"업그레이드 오류", JOptionPane.ERROR_MESSAGE);
+			}
+		}, "UpgradeThread").start();
+	}
+	
+	
+
+	// SplashWindow.java 내 doUpgrade() 메서드
+	private void doUpgradeNew0000() {
 		// ── 시계를 모니터 우상단으로 이동 ────────────────────────
 		if (clockHost != null) clockHost.moveToTopRight();
 
