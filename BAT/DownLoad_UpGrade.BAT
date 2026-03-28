@@ -5,13 +5,14 @@ rem
 rem  **********************************************************
 @echo off
 rem chcp 65001 > nul
+cls
 echo ============================================
 echo   KootPanKing 다운로드 및 실행
 echo ============================================
 set "URL=https://github.com/GarpsuKim/KootPanKing/releases/download/v1.0.0/KootPanKing.zip"
 set "ZIP=KootPanKingUpgrade.zip"
 set "DIR=KootPanKing"
-pause
+timeout /t 3 /nobreak
 if exist  "%ZIP%"   del "%ZIP%"
 echo.
 echo [1/3] 다운로드 중...
@@ -25,7 +26,7 @@ if %errorlevel% == 0 (
 )
 if not exist "%ZIP%" (
     echo [오류] 다운로드 실패
-    pause
+    timeout /t 3 /nobreak
     exit /b
 )
 echo 완료
@@ -39,6 +40,6 @@ powershell -Command "Expand-Archive -Path '%ZIP%' -DestinationPath . -Force"
 echo 완료
 echo.
 echo [3/3] 실행...
-pause
+timeout /t 3 /nobreak
 rem start "" "%DIR%\KootPanKing.exe"
 start "" KootPanKing.exe
