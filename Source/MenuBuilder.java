@@ -11,8 +11,9 @@ import java.util.Date;
 	* 부모 클래스에 대한 직접 의존 없이 JPopupMenu 를 빌드한다.
 */
 public class MenuBuilder {
-    private static final String mainTitle = "끝판왕 (v1.0f)  [Alt-K]";
-    private JPopupMenu menu;
+    private static final String mainTitle = "끝판왕 (v1.0g)  [Alt-K]";
+	private static final boolean ExtraMenuEnabled = true ; 
+	private JPopupMenu menu;
     private JMenu      systemMenu;
     // ── 호스트(KootPanKing)가 제공해야 하는 콜백 인터페이스 ──
     public interface HostContext {
@@ -226,12 +227,12 @@ public class MenuBuilder {
             menu.add(buildAlarmItem());
             // menu.add(buildGmailCalendarMenu());
 			JMenu gmailMenu = buildGmailCalendarMenu();
-			gmailMenu.setEnabled(false);
+			gmailMenu.setEnabled(ExtraMenuEnabled);
 			menu.add(gmailMenu);
 			
 			// 비활성화 방법 1 - 메뉴 항목은 보이되 disabled
 			JMenu kakaoMenu = buildKakaoMenu(new JMenu("카카오톡..."));
-			kakaoMenu.setEnabled(false);
+			kakaoMenu.setEnabled(ExtraMenuEnabled);
 			menu.add(kakaoMenu);
 			// menu.add(buildKakaoMenu(new JMenu("카카오톡...")));
             menu.add(buildTelegramMenu());
@@ -575,7 +576,7 @@ public class MenuBuilder {
     private JMenuItem buildAlarmItem() {
         JMenuItem alarmItem = new JMenuItem("알람 관리...");
         alarmItem.addActionListener(e -> host.showAlarmDialog());
-        alarmItem.setEnabled(false); // [배포] 비활성화
+        alarmItem.setEnabled(ExtraMenuEnabled); // [배포] 비활성화
         return alarmItem;
 	}
 	
@@ -594,7 +595,7 @@ public class MenuBuilder {
 			}
 		});
         telegramMenu.add(telegramHelpItem);
-        telegramMenu.setEnabled(false); // [배포] 비활성화
+        telegramMenu.setEnabled(ExtraMenuEnabled); // [배포] 비활성화
         return telegramMenu;
 	}
 	

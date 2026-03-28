@@ -45,9 +45,9 @@ import java.net.URL;
 	*   안내 메시지가 표시된다.
 */
 public class SplashWindow extends JFrame {
-	
+	private static final boolean ExtraMenuEnabled = true ; 
     // ── 상수 ─────────────────────────────────────────────────────
-    private static final String TITLE      = "끝판왕 (KootPanKing Ver 1.0f)";
+    private static final String TITLE      = "끝판왕 (KootPanKing Ver 1.0g)";
     private static final Font   LOG_FONT   = new Font("Malgun Gothic", Font.PLAIN, 13);
     private static final Color  BG_COLOR   = new Color(235, 245, 255); // 연한 하늘색 배경
     private static final Color  FG_COLOR   = new Color( 20,  50,  90); // 진한 네이비 글자
@@ -300,7 +300,7 @@ public class SplashWindow extends JFrame {
         chimeItem.addActionListener(e -> {
             if (clockHost != null) clockHost.showChimeDialog();
 		});
-        // chimeItem.setEnabled(false); // [배포] 비활성화
+        chimeItem.setEnabled(ExtraMenuEnabled); // [배포] 비활성화
         toolsMenu.add(chimeItem);
 		
         // ── 알람 관리 ─────────────────────────────────────────────
@@ -308,7 +308,7 @@ public class SplashWindow extends JFrame {
         alarmItem.addActionListener(e -> {
             if (clockHost != null) clockHost.showAlarmDialog();
 		});
-        alarmItem.setEnabled(false); // [배포] 비활성화
+        alarmItem.setEnabled(ExtraMenuEnabled); // [배포] 비활성화
         toolsMenu.add(alarmItem);
 		
         toolsMenu.addSeparator();
@@ -317,33 +317,33 @@ public class SplashWindow extends JFrame {
         if (clockHost != null) {
             JMenu gmailMenu = clockHost.buildGmailCalendarMenu();
             if (gmailMenu != null) {
-                gmailMenu.setEnabled(false); // [배포] 비활성화
+                gmailMenu.setEnabled(ExtraMenuEnabled); // [배포] 비활성화
                 toolsMenu.add(gmailMenu);
 			}
 			} else {
-            toolsMenu.add(makeMenuItem("Gmail / Calendar", null)).setEnabled(false);
+            toolsMenu.add(makeMenuItem("Gmail / Calendar", null)).setEnabled(ExtraMenuEnabled);
 		}
 		
         // ── 카카오톡 ──────────────────────────────────────────────
         if (clockHost != null) {
             JMenu kakaoMenu = clockHost.buildKakaoMenu();
             if (kakaoMenu != null) {
-                kakaoMenu.setEnabled(false); // [배포] 비활성화
+                kakaoMenu.setEnabled(ExtraMenuEnabled); // [배포] 비활성화
                 toolsMenu.add(kakaoMenu);
 			}
 			} else {
-            toolsMenu.add(makeMenuItem("카카오톡...", null)).setEnabled(false);
+            toolsMenu.add(makeMenuItem("카카오톡...", null)).setEnabled(ExtraMenuEnabled);
 		}
 		
         // ── 텔레그램 ──────────────────────────────────────────────
         if (clockHost != null) {
             JMenu tgMenu = clockHost.buildTelegramMenu();
             if (tgMenu != null) {
-                tgMenu.setEnabled(false); // [배포] 비활성화
+                tgMenu.setEnabled(ExtraMenuEnabled); // [배포] 비활성화
                 toolsMenu.add(tgMenu);
 			}
 			} else {
-            toolsMenu.add(makeMenuItem("텔레그램", null)).setEnabled(false);
+            toolsMenu.add(makeMenuItem("텔레그램", null)).setEnabled(ExtraMenuEnabled);
 		}
 		
         return toolsMenu;

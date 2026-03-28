@@ -7,7 +7,6 @@ cd /d "%~dp0.."
 set "ROOT_DIR=%CD%"
 
 echo ROOT_DIR = %ROOT_DIR%
-pause
 
 REM ── 기본 설정 ─────────────────────────────────────────────
 set "PROJECT=KootPanKing"
