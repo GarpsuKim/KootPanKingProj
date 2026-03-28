@@ -2105,79 +2105,229 @@ public class MenuBuilder {
         host.prepareDialog(dlg);
         dlg.setVisible(true);
 	}
+
 	
     // ── Gmail 보내기 항목 (별도 메서드로 가독성 향상) ──────────────
     private JMenuItem buildSendGmailItem() {
         JMenuItem sendGmailItem = new JMenuItem("📧 지금 Gmail 보내기");
         sendGmailItem.addActionListener(e -> {
             GmailSender gmail = host.getGmail();
-			
-            // 입력 서브 다이얼로그
+
+            // ── 입력 패널 ─────────────────────────────────────────
             JPanel ip = new JPanel(new GridBagLayout());
+            ip.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
             GridBagConstraints ig = new GridBagConstraints();
             ig.insets = new Insets(4, 4, 4, 4);
             ig.anchor = GridBagConstraints.WEST;
-			
+
             ig.gridx = 0; ig.gridy = 0;
             ip.add(new JLabel("발신자 Gmail주소:"), ig);
             JTextField fromField = new JTextField(gmail.from, 24);
             ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
             ip.add(fromField, ig);
-			
+
             ig.gridx = 0; ig.gridy = 1; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
             ip.add(new JLabel("발신자 앱비밀번호:"), ig);
             JPasswordField passField = new JPasswordField(gmail.pass, 24);
             ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
             ip.add(passField, ig);
-			
-            ig.gridx = 0; ig.gridy = 2; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+
+            // 앱 비밀번호 안내 버튼
+            ig.gridx = 1; ig.gridy = 2; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ig.anchor = GridBagConstraints.WEST;
+            JButton guideBtn = new JButton("앱 비밀번호 안내");
+            guideBtn.setFont(guideBtn.getFont().deriveFont(11f));
+            guideBtn.addActionListener(ev -> {
+                try {
+                    java.awt.Desktop.getDesktop().browse(
+                        new java.net.URI("https://blog.naver.com/garpsu/224232537112"));
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(null,
+                        "브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
+                }
+            });
+            ip.add(guideBtn, ig);
+
+            ig.gridx = 0; ig.gridy = 3; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ig.anchor = GridBagConstraints.WEST;
             ip.add(new JLabel("수신자 이메일:"), ig);
             JTextField toField = new JTextField(20);
             toField.setText(!gmail.lastTo.isEmpty() ? gmail.lastTo : gmail.from);
             ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
             ip.add(toField, ig);
-			
-            ig.gridx = 0; ig.gridy = 3; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+
+            ig.gridx = 0; ig.gridy = 4; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
             ip.add(new JLabel("제목:"), ig);
             JTextField subjField = new JTextField("[끝판왕] 알림", 20);
             ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
             ip.add(subjField, ig);
-			
-            ig.gridx = 0; ig.gridy = 4; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+
+            ig.gridx = 0; ig.gridy = 5; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
             ip.add(new JLabel("내용:"), ig);
             JTextArea bodyArea = new JTextArea(4, 20);
             bodyArea.setLineWrap(true);
             bodyArea.setText(GmailSender.APP_SIGNATURE
-			+ new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
+                + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
             ig.gridx = 1; ig.fill = GridBagConstraints.BOTH; ig.weightx = 1; ig.weighty = 1;
             ip.add(new JScrollPane(bodyArea), ig);
-			
+
+            // ── JDialog 조립 (화면 중앙 배치) ────────────────────
+            JButton okBtn     = new JButton("OK");
+            JButton cancelBtn = new JButton("Cancel");
+            JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
+            south.add(okBtn); south.add(cancelBtn);
+
+            JDialog dlg = new JDialog((java.awt.Frame) null, "📧 지금 Gmail 보내기", true);
+            dlg.setLayout(new BorderLayout(0, 4));
+            dlg.add(ip, BorderLayout.CENTER);
+            dlg.add(south, BorderLayout.SOUTH);
+            dlg.pack();
+            dlg.setLocationRelativeTo(null);  // 화면 중앙
+            dlg.setAlwaysOnTop(true);
+
+            boolean[] confirmed = {false};
+            okBtn.addActionListener(ev -> { confirmed[0] = true; dlg.dispose(); });
+            cancelBtn.addActionListener(ev -> dlg.dispose());
+
+            dlg.setVisible(true);
+            if (!confirmed[0]) return;
+
+            String fromAddr = fromField.getText().trim();
+            String passStr  = new String(passField.getPassword()).trim();
+            if (fromAddr.isEmpty() || passStr.isEmpty()) {
+                JOptionPane.showMessageDialog(null,
+                    "발신자 Gmail주소와 앱비밀번호를 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            String toAddr = toField.getText().trim();
+            if (toAddr.isEmpty()) {
+                JOptionPane.showMessageDialog(null,
+                    "수신자 이메일을 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            gmail.from = fromAddr;
+            gmail.pass = passStr;
+
+            sendGmailItem.setEnabled(false);
+            final String subj = subjField.getText().trim();
+            final String body = bodyArea.getText().trim();
+
+            new Thread(() -> {
+                try {
+                    gmail.send(toAddr, subj, body);
+                    SwingUtilities.invokeLater(() -> {
+                        host.saveConfig();
+                        sendGmailItem.setEnabled(true);
+                        JOptionPane.showMessageDialog(null,
+                            "✅ Gmail 전송 완료!\n수신자: " + toAddr,
+                            "Gmail 보내기", JOptionPane.INFORMATION_MESSAGE);
+                    });
+                } catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> {
+                        sendGmailItem.setEnabled(true);
+                        JOptionPane.showMessageDialog(null,
+                            "❌ 전송 실패: " + ex.getMessage()
+                            + "\n\n확인사항:\n1. Gmail 앱 비밀번호 확인"
+                            + "\n2. Gmail → 구글 계정 → 보안 → 앱 비밀번호",
+                            "Gmail 오류", JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            }, "GmailSendNow").start();
+        });
+        return sendGmailItem;
+    }
+	
+
+    // ── Gmail 보내기 항목 (별도 메서드로 가독성 향상) ──────────────
+    private JMenuItem buildSendGmailItem000() {
+        JMenuItem sendGmailItem = new JMenuItem("📧 지금 Gmail 보내기");
+        sendGmailItem.addActionListener(e -> {
+            GmailSender gmail = host.getGmail();
+
+            // ── 입력 패널 ─────────────────────────────────────────
+            JPanel ip = new JPanel(new GridBagLayout());
+            GridBagConstraints ig = new GridBagConstraints();
+            ig.insets = new Insets(4, 4, 4, 4);
+            ig.anchor = GridBagConstraints.WEST;
+
+            ig.gridx = 0; ig.gridy = 0;
+            ip.add(new JLabel("발신자 Gmail주소:"), ig);
+            JTextField fromField = new JTextField(gmail.from, 24);
+            ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
+            ip.add(fromField, ig);
+
+            ig.gridx = 0; ig.gridy = 1; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ip.add(new JLabel("발신자 앱비밀번호:"), ig);
+            JPasswordField passField = new JPasswordField(gmail.pass, 24);
+            ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
+            ip.add(passField, ig);
+
+            // 앱 비밀번호 안내 버튼
+            ig.gridx = 1; ig.gridy = 2; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ig.anchor = GridBagConstraints.WEST;
+            JButton guideBtn = new JButton("앱 비밀번호 안내");
+            guideBtn.setFont(guideBtn.getFont().deriveFont(11f));
+            guideBtn.addActionListener(ev -> {
+                try {
+                    java.awt.Desktop.getDesktop().browse(
+                        new java.net.URI("https://blog.naver.com/garpsu/224232537112"));
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(null,
+                        "브라우저 열기 실패: " + ex.getMessage(), "오류", JOptionPane.ERROR_MESSAGE);
+                }
+            });
+            ip.add(guideBtn, ig);
+
+            ig.gridx = 0; ig.gridy = 3; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ig.anchor = GridBagConstraints.WEST;
+            ip.add(new JLabel("수신자 이메일:"), ig);
+            JTextField toField = new JTextField(20);
+            toField.setText(!gmail.lastTo.isEmpty() ? gmail.lastTo : gmail.from);
+            ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
+            ip.add(toField, ig);
+
+            ig.gridx = 0; ig.gridy = 4; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ip.add(new JLabel("제목:"), ig);
+            JTextField subjField = new JTextField("[끝판왕] 알림", 20);
+            ig.gridx = 1; ig.fill = GridBagConstraints.HORIZONTAL; ig.weightx = 1;
+            ip.add(subjField, ig);
+
+            ig.gridx = 0; ig.gridy = 5; ig.fill = GridBagConstraints.NONE; ig.weightx = 0;
+            ip.add(new JLabel("내용:"), ig);
+            JTextArea bodyArea = new JTextArea(4, 20);
+            bodyArea.setLineWrap(true);
+            bodyArea.setText(GmailSender.APP_SIGNATURE
+                + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
+            ig.gridx = 1; ig.fill = GridBagConstraints.BOTH; ig.weightx = 1; ig.weighty = 1;
+            ip.add(new JScrollPane(bodyArea), ig);
+
             if (JOptionPane.showConfirmDialog(host.getOwnerComponent(), ip,
-				"📧 지금 Gmail 보내기",
-				JOptionPane.OK_CANCEL_OPTION,
-			JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
-			
+                "📧 지금 Gmail 보내기",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
+
             String fromAddr = fromField.getText().trim();
             String passStr  = new String(passField.getPassword()).trim();
             if (fromAddr.isEmpty() || passStr.isEmpty()) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(),
-				"발신자 Gmail주소와 앱비밀번호를 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
+                    "발신자 Gmail주소와 앱비밀번호를 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
                 return;
-			}
+            }
             String toAddr = toField.getText().trim();
             if (toAddr.isEmpty()) {
                 JOptionPane.showMessageDialog(host.getOwnerComponent(),
-				"수신자 이메일을 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
+                    "수신자 이메일을 입력하세요.", "Gmail 보내기", JOptionPane.WARNING_MESSAGE);
                 return;
-			}
-			
+            }
+
             gmail.from = fromAddr;
             gmail.pass = passStr;
-			
+
             sendGmailItem.setEnabled(false);
             final String subj = subjField.getText().trim();
             final String body = bodyArea.getText().trim();
-			
+
             new Thread(() -> {
                 try {
                     gmail.send(toAddr, subj, body);
@@ -2186,22 +2336,22 @@ public class MenuBuilder {
                         sendGmailItem.setEnabled(true);
                         JOptionPane.showMessageDialog(host.getOwnerComponent(),
                             "✅ Gmail 전송 완료!\n수신자: " + toAddr,
-						"Gmail 보내기", JOptionPane.INFORMATION_MESSAGE);
-					});
-					} catch (Exception ex) {
+                            "Gmail 보내기", JOptionPane.INFORMATION_MESSAGE);
+                    });
+                } catch (Exception ex) {
                     SwingUtilities.invokeLater(() -> {
                         sendGmailItem.setEnabled(true);
                         JOptionPane.showMessageDialog(host.getOwnerComponent(),
                             "❌ 전송 실패: " + ex.getMessage()
                             + "\n\n확인사항:\n1. Gmail 앱 비밀번호 확인"
                             + "\n2. Gmail → 구글 계정 → 보안 → 앱 비밀번호",
-						"Gmail 오류", JOptionPane.ERROR_MESSAGE);
-					});
-				}
-			}, "GmailSendNow").start();
-		});
+                            "Gmail 오류", JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            }, "GmailSendNow").start();
+        });
         return sendGmailItem;
-	}
+    }
 	
     // ═══════════════════════════════════════════════════════════
     //  HostContext 구현체 (KootPanKing 에서 이동)

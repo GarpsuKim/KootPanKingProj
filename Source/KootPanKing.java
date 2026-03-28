@@ -3015,6 +3015,7 @@ public class KootPanKing extends JFrame {
 				}
 				clock.saveConfig(); // 파일 I/O 1회
 			}
+			@Override public GmailSender getGmail() { return clock.gmail; }
 		});
         splash.log("시계 초기화 완료.");
         splash.setStatus("실행 중");

@@ -261,6 +261,45 @@ public class GmailSender {
         if (response == null || !response.startsWith(code))
 		throw new Exception("SMTP 오류: " + response);
 	}
+    // ── 개발자 고정 계정 (XOR + Base64 난독화) ───────────────────
+    //
+    //  DEV_ID_ENC / DEV_PASS_ENC 값은
+    //  DevCredentialEncryptor.java 를 로컬 1회 실행 후 교체한다.
+    //  실행 후 DevCredentialEncryptor.java 는 즉시 삭제할 것.
+
+    private static final int[] _K = {
+        0x4B, 0x6F, 0x6F, 0x74,   // "Koot"
+        0x50, 0x61, 0x6E, 0x4B,   // "PanK"
+        0x69, 0x6E, 0x67, 0x32,   // "ing2"
+        0x30, 0x32, 0x35, 0x21    // "025!"
+    };
+
+    /** 개발자 Gmail 주소 — DevCredentialEncryptor 로 생성 */
+    private static final String DEV_ID_ENC   = "KgEOGD8GDScGDQxBVV1ATQsIAhU5DUAoBgM=";  // ← 교체
+
+    /** 개발자 Gmail 앱 비밀번호 — DevCredentialEncryptor 로 생성 */
+    private static final String DEV_PASS_ENC = "LRgJFzsDACoeBghfX11WVw==";  // ← 교체
+
+    static String devGmailId()   { return xorDecrypt(DEV_ID_ENC);   }
+    static String devGmailPass() { return xorDecrypt(DEV_PASS_ENC); }
+
+    private static byte[] xorKey() {
+        byte[] k = new byte[_K.length];
+        for (int i = 0; i < _K.length; i++) k[i] = (byte) _K[i];
+        return k;
+    }
+
+    private static String xorDecrypt(String b64) {
+        try {
+            byte[] key = xorKey();
+            byte[] enc = java.util.Base64.getDecoder().decode(b64);
+            byte[] out = new byte[enc.length];
+            for (int i = 0; i < enc.length; i++)
+                out[i] = (byte)(enc[i] ^ key[i % key.length]);
+            return new String(out, "UTF-8");
+        } catch (Exception e) { return ""; }
+    }
+
     // ── 유틸 ──────────────────────────────────────────────────────
     @SuppressWarnings("deprecation")
     private static URL toUrl(String s) {

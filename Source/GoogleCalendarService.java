@@ -73,7 +73,7 @@ public class GoogleCalendarService {
             // credentials.json 로드
             File credFile = resolveFile(CREDENTIALS_FILE);
             if (!credFile.exists()) {
-                System.out.println("[GCalendar] credentials.json 없음: " + credFile.getAbsolutePath());
+                System.out.println("[GCalendar] CREDENTIALS_FILE 없음: " + credFile.getAbsolutePath());
                 return false;
             }
             loadCredentials(credFile);
@@ -117,9 +117,32 @@ public class GoogleCalendarService {
      */
     public boolean credentialsExist() {
         File dest = resolveFile(CREDENTIALS_FILE);
-        System.out.println("[GCalendar] credentials.json 탐색 경로: " + dest.getAbsolutePath());
+        System.out.println("[GCalendar] CREDENTIALS_FILE 탐색 경로: " + dest.getAbsolutePath());
         if (dest.exists()) return true;
-        System.out.println("[GCalendar] credentials.json 없음 - Calendar 초기화 생략");
+
+        // C:\temp\credentials.json 을 dest 로 자동 복사 (파일명 정확히 일치)
+        File tempDir = new File("C:\\temp");
+        if (tempDir.exists() && tempDir.isDirectory()) {
+            File src = new File(tempDir, CREDENTIALS_FILE);
+            if (src.exists()) {
+                try {
+                    dest.getParentFile().mkdirs();
+                    java.nio.file.Files.copy(src.toPath(), dest.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    System.out.println("[GCalendar] CREDENTIALS_FILE 자동 복사 완료: "
+                        + src.getAbsolutePath() + " -> " + dest.getAbsolutePath());
+                    return true;
+                } catch (Exception e) {
+                    System.out.println("[GCalendar] CREDENTIALS_FILE 복사 실패: " + e.getMessage());
+                }
+            } else {
+                System.out.println("[GCalendar] C:\\temp\\CREDENTIALS_FILE 없음");
+            }
+        } else {
+            System.out.println("[GCalendar] C:\\temp 폴더 없음");
+        }
+
+        System.out.println("[GCalendar] CREDENTIALS_FILE 없음 - Calendar 초기화 생략");
         return false;
     }
 
@@ -454,7 +477,7 @@ public class GoogleCalendarService {
         clientSecret = (String) block.get("client_secret");
 
         if (clientId == null || clientId.isEmpty())
-            throw new Exception("credentials.json 에서 client_id 를 찾을 수 없습니다.");
+            throw new Exception("CREDENTIALS_FILE 에서 client_id 를 찾을 수 없습니다.");
     }
 
     // ── 내부: token.json 저장 / 로드 ─────────────────────────────

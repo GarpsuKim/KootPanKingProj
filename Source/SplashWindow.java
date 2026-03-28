@@ -137,6 +137,9 @@ public class SplashWindow extends JFrame {
 			* 2개 이상 저장 시에는 setMultipleConfigAndSave 를 사용할 것.
 		*/
         void setConfigAndSave(String key, String value);
+
+        /** 오류 신고 메일 발송용 GmailSender 접근 */
+        GmailSender getGmail();
 	}
     // ═══════════════════════════════════════════════════════════
     //  생성자
@@ -1141,6 +1144,11 @@ public class SplashWindow extends JFrame {
         aboutItem.addActionListener(e -> doShowAbout());
         helpMenu.add(aboutItem);
 		
+        // ── 오류 신고 및 개발자에게 문의 ─────────────────────────
+        JMenuItem contactItem = makeMenuItem("📩 오류 신고 및 개발자에게 문의", "개발자에게 이메일로 문의합니다");
+        contactItem.addActionListener(e -> doContactDeveloper());
+        helpMenu.add(contactItem);
+		
         return helpMenu;
 	}
 	
@@ -1762,7 +1770,205 @@ public class SplashWindow extends JFrame {
 	}
 	
     /** Help → About */
-    private void doShowAbout() {
+    // ═══════════════════════════════════════════════════════════
+    //  Help → 오류 신고 및 개발자에게 문의
+    // ═══════════════════════════════════════════════════════════
+    private void doContactDeveloper() {
+        // clockHost 미연결이면 안내 후 종료
+        if (clockHost == null) {
+            JOptionPane.showMessageDialog(this,
+                "시계가 초기화되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+                "개발자 문의", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // ── 상수 ──────────────────────────────────────────────────
+        final String RECEIVER = "garpsu@naver.com";
+        final Font   LBL_FONT = new Font("Malgun Gothic", Font.PLAIN, 13);
+        final Font   FLD_FONT = new Font("Malgun Gothic", Font.PLAIN, 13);
+
+        // ── 다이얼로그 패널 ───────────────────────────────────────
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.insets  = new Insets(5, 5, 5, 5);
+        gc.anchor  = GridBagConstraints.WEST;
+        gc.fill    = GridBagConstraints.HORIZONTAL;
+
+        int row = 0;
+
+        // 제1항목: 수신자 (고정)
+        gc.gridx = 0; gc.gridy = row; gc.weightx = 0; gc.fill = GridBagConstraints.NONE;
+        JLabel lblTo = new JLabel("수신자 이메일:"); lblTo.setFont(LBL_FONT);
+        panel.add(lblTo, gc);
+        gc.gridx = 1; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
+        JLabel lblToVal = new JLabel(RECEIVER); lblToVal.setFont(LBL_FONT);
+        panel.add(lblToVal, gc);
+        row++;
+
+        // 제2항목: 발신자 전화번호
+        gc.gridx = 0; gc.gridy = row; gc.weightx = 0; gc.fill = GridBagConstraints.NONE;
+        JLabel lblPhone = new JLabel("발신자 전화번호:"); lblPhone.setFont(LBL_FONT);
+        panel.add(lblPhone, gc);
+        gc.gridx = 1; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
+        JTextField phoneField = new JTextField(20); phoneField.setFont(FLD_FONT);
+        phoneField.setToolTipText("010-xxxx-yyyy 형식으로 입력하세요");
+        panel.add(phoneField, gc);
+        row++;
+
+        // 제3항목: 발신자 성명
+        gc.gridx = 0; gc.gridy = row; gc.weightx = 0; gc.fill = GridBagConstraints.NONE;
+        JLabel lblName = new JLabel("발신자 성명:"); lblName.setFont(LBL_FONT);
+        panel.add(lblName, gc);
+        gc.gridx = 1; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
+        JTextField nameField = new JTextField(20); nameField.setFont(FLD_FONT);
+        panel.add(nameField, gc);
+        row++;
+
+        // 제4항목: 유형 (라디오버튼)
+        gc.gridx = 0; gc.gridy = row; gc.weightx = 0; gc.fill = GridBagConstraints.NONE;
+        JLabel lblType = new JLabel("문의 유형:"); lblType.setFont(LBL_FONT);
+        panel.add(lblType, gc);
+        gc.gridx = 1; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
+        JPanel typePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        ButtonGroup typeGroup = new ButtonGroup();
+        JRadioButton rbError   = new JRadioButton("오류 신고");
+        JRadioButton rbImprove = new JRadioButton("개선 요청");
+        JRadioButton rbAdd     = new JRadioButton("추가 요청");
+        rbError.setFont(LBL_FONT); rbImprove.setFont(LBL_FONT); rbAdd.setFont(LBL_FONT);
+        typeGroup.add(rbError); typeGroup.add(rbImprove); typeGroup.add(rbAdd);
+        typePanel.add(rbError); typePanel.add(rbImprove); typePanel.add(rbAdd);
+        panel.add(typePanel, gc);
+        row++;
+
+        // 제5항목: 내용 (넓은 텍스트 영역)
+        gc.gridx = 0; gc.gridy = row; gc.weightx = 0; gc.fill = GridBagConstraints.NONE;
+        gc.anchor = GridBagConstraints.NORTHWEST;
+        JLabel lblBody = new JLabel("내용:"); lblBody.setFont(LBL_FONT);
+        panel.add(lblBody, gc);
+        gc.gridx = 1; gc.weightx = 1; gc.weighty = 1;
+        gc.fill = GridBagConstraints.BOTH;
+        JTextArea bodyArea = new JTextArea(8, 30);
+        bodyArea.setFont(FLD_FONT); bodyArea.setLineWrap(true); bodyArea.setWrapStyleWord(true);
+        JScrollPane bodyScroll = new JScrollPane(bodyArea);
+        bodyScroll.setPreferredSize(new Dimension(420, 160));
+        panel.add(bodyScroll, gc);
+        gc.weighty = 0; gc.anchor = GridBagConstraints.WEST;
+        row++;
+
+        // 제6항목: 안내문
+        gc.gridx = 0; gc.gridy = row; gc.gridwidth = 2;
+        gc.fill = GridBagConstraints.HORIZONTAL; gc.weightx = 1;
+        JLabel lblNotice = new JLabel(
+            "<html><font color='#666666' size='3'>"
+            + "이 내용은, 시스템 기본 이메일 계정에서 김갑수에게 발신됩니다.<br>"
+            + "발신자 본인의 이메일 계정과는 전혀 관계없습니다."
+            + "</font></html>");
+        lblNotice.setFont(new Font("Malgun Gothic", Font.PLAIN, 12));
+        lblNotice.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 0));
+        panel.add(lblNotice, gc);
+        gc.gridwidth = 1;
+
+        // ── 버튼 ──────────────────────────────────────────────────
+        JButton okBtn     = new JButton("확인");
+        JButton cancelBtn = new JButton("취소");
+        okBtn.setPreferredSize(new Dimension(80, 28));
+        cancelBtn.setPreferredSize(new Dimension(80, 28));
+
+        // ── 다이얼로그 조립 ───────────────────────────────────────
+        JDialog dlg = new JDialog(this, "프로그램 오류 신고 및 개발자에게 문의", true);
+        dlg.setLayout(new BorderLayout(0, 6));
+        dlg.add(panel, BorderLayout.CENTER);
+
+        JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
+        south.add(okBtn); south.add(cancelBtn);
+        dlg.add(south, BorderLayout.SOUTH);
+
+        dlg.pack();
+        dlg.setMinimumSize(new Dimension(520, dlg.getHeight()));
+        dlg.setLocationRelativeTo(this);
+        dlg.setAlwaysOnTop(true);
+        dlg.setResizable(true);
+
+        // ── 버튼 액션 ─────────────────────────────────────────────
+        cancelBtn.addActionListener(ev -> dlg.dispose());
+
+        okBtn.addActionListener(ev -> {
+            // 빈칸 검사
+            String phone = phoneField.getText().trim();
+            String name  = nameField.getText().trim();
+            String body  = bodyArea.getText().trim();
+            String type  = rbError.isSelected() ? "오류 신고"
+                         : rbImprove.isSelected() ? "개선 요청"
+                         : rbAdd.isSelected()     ? "추가 요청" : "";
+
+            if (phone.isEmpty() || name.isEmpty() || body.isEmpty()) {
+                JOptionPane.showMessageDialog(dlg,
+                    "전화번호, 성명, 내용은 필수 입력입니다.",
+                    "입력 확인", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // 전화번호 패턴 체크: 010-xxxx-yyyy
+            if (!phone.matches("010-\\d{3,4}-\\d{4}")) {
+                JOptionPane.showMessageDialog(dlg,
+                    "전화번호 형식이 올바르지 않습니다.\n010-xxxx-yyyy 형식으로 입력해 주세요.",
+                    "입력 확인", JOptionPane.WARNING_MESSAGE);
+                phoneField.requestFocus();
+                return;
+            }
+
+            // 발신 계정 결정: 사용자 Gmail 설정 있으면 우선 사용, 없으면 개발자 내장 계정 사용
+            GmailSender gmail = clockHost.getGmail();
+            boolean useDevAccount = !gmail.isConfigured();
+            String sendFrom = useDevAccount ? GmailSender.devGmailId()   : gmail.from;
+            String sendPass = useDevAccount ? GmailSender.devGmailPass() : gmail.pass;
+
+            if (sendFrom.isEmpty() || sendPass.isEmpty()) {
+                JOptionPane.showMessageDialog(dlg,
+                    "발송 계정을 확인할 수 없습니다.",
+                    "오류", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            String subject = "[끝판왕 문의] " + (type.isEmpty() ? "" : type + " - ") + name;
+            String mailBody = (type.isEmpty() ? "" : "■ 문의 유형 : " + type + "\n")
+                + "■ 발신자 성명 : " + name + "\n"
+                + "■ 발신자 전화 : " + phone + "\n"
+                + (useDevAccount ? "■ 발신 계정  : 개발자 내장 계정\n" : "")
+                + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                + body + "\n"
+                + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                + GmailSender.APP_SIGNATURE;
+
+            okBtn.setEnabled(false);
+            okBtn.setText("전송 중...");
+
+            new Thread(() -> {
+                try {
+                    gmail.smtpSend(sendFrom, sendPass, sendFrom, RECEIVER, subject, mailBody);
+                    SwingUtilities.invokeLater(() -> {
+                        dlg.dispose();
+                        JOptionPane.showMessageDialog(SplashWindow.this,
+                            "✅ 전송 완료!\n수신자: " + RECEIVER,
+                            "전송 완료", JOptionPane.INFORMATION_MESSAGE);
+                    });
+                } catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> {
+                        okBtn.setEnabled(true);
+                        okBtn.setText("확인");
+                        JOptionPane.showMessageDialog(dlg,
+                            "❌ 전송 실패: " + ex.getMessage(),
+                            "전송 오류", JOptionPane.ERROR_MESSAGE);
+                    });
+                }
+            }, "ContactDeveloper").start();
+        });
+
+        dlg.setVisible(true);
+    }
+
+        private void doShowAbout() {
         if (clockHost == null) {
             showNotReady();
             return;
