@@ -1160,32 +1160,76 @@ public class KootPanKing extends JFrame {
 
     void autoStartItemActionListener(JCheckBoxMenuItem autoStartItem) {
         if (isChild) return;  // 자식 인스턴스는 자동 실행 등록 불가
-		if (autoStartItem.isSelected()) {
-			if (AppRestarter.AutoStart.set(true)) {
-				prepareMessageBox();
-				JOptionPane.showMessageDialog(null,
-					"✅ 자동 실행 등록 완료!\n다음 부팅부터 자동으로 시작됩니다.",
-				"자동 실행", JOptionPane.INFORMATION_MESSAGE);
-				} else {
-				autoStartItem.setSelected(false);
-				prepareMessageBox();
-				JOptionPane.showMessageDialog(null,
-					"❌ 자동 실행 등록 실패\n관리자 권한이 필요할 수 있습니다.",
-				"자동 실행", JOptionPane.ERROR_MESSAGE);
-			}
-			} else {
-			if (AppRestarter.AutoStart.set(false)) {
-				prepareMessageBox();
-				JOptionPane.showMessageDialog(null,
-				"✅ 자동 실행 해제 완료!", "자동 실행", JOptionPane.INFORMATION_MESSAGE);
-				} else {
-				autoStartItem.setSelected(true);
-				prepareMessageBox();
-				JOptionPane.showMessageDialog(null,
-				"❌ 자동 실행 해제 실패", "자동 실행", JOptionPane.ERROR_MESSAGE);
-			}
-		}
-	}  //  autoStartItemActionListener
+        if (autoStartItem.isSelected()) {
+            if (AppRestarter.AutoStart.set(true)) {
+                prepareMessageBox();
+                showAutoCloseDialog("✅ 자동 실행 등록 완료!\n다음 부팅부터 자동으로 시작됩니다.",
+                    "자동 실행", 15);
+            } else {
+                autoStartItem.setSelected(false);
+                prepareMessageBox();
+                JOptionPane.showMessageDialog(null,
+                    "❌ 자동 실행 등록 실패\n관리자 권한이 필요할 수 있습니다.",
+                    "자동 실행", JOptionPane.ERROR_MESSAGE);
+            }
+        } else {
+            if (AppRestarter.AutoStart.set(false)) {
+                prepareMessageBox();
+                showAutoCloseDialog("✅ 자동 실행 해제 완료!", "자동 실행", 15);
+            } else {
+                autoStartItem.setSelected(true);
+                prepareMessageBox();
+                JOptionPane.showMessageDialog(null,
+                    "❌ 자동 실행 해제 실패", "자동 실행", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }  //  autoStartItemActionListener
+
+    /** 지정 초 후 자동으로 닫히는 안내 다이얼로그 (OK 클릭 시 즉시 닫힘) */
+    private void showAutoCloseDialog(String message, String title, int seconds) {
+        javax.swing.JDialog dlg = new javax.swing.JDialog((java.awt.Frame) null, title, false);
+        dlg.setAlwaysOnTop(true);
+
+        // 메시지 패널
+        JLabel msgLabel = new JLabel(
+            "<html>" + message.replace("\n", "<br>") + "</html>",
+            javax.swing.UIManager.getIcon("OptionPane.informationIcon"),
+            JLabel.LEFT);
+        msgLabel.setIconTextGap(12);
+        msgLabel.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 16, 8, 16));
+
+        // OK 버튼
+        JButton okBtn = new JButton("OK");
+        okBtn.setPreferredSize(new java.awt.Dimension(80, 26));
+        JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 6));
+        south.add(okBtn);
+
+        dlg.setLayout(new BorderLayout());
+        dlg.add(msgLabel, BorderLayout.CENTER);
+        dlg.add(south, BorderLayout.SOUTH);
+        dlg.pack();
+        dlg.setLocationRelativeTo(null);  // 화면 중앙
+
+        // 15초 카운트다운
+        final int[] sec = { seconds };
+        javax.swing.Timer countdown = new javax.swing.Timer(1000, null);
+        countdown.addActionListener(ev -> {
+            sec[0]--;
+            dlg.setTitle(title + "  —  " + sec[0] + "초 후 닫힘");
+            if (sec[0] <= 0) { countdown.stop(); dlg.dispose(); }
+        });
+        dlg.setTitle(title + "  —  " + sec[0] + "초 후 닫힘");
+        countdown.start();
+
+        okBtn.addActionListener(ev -> { countdown.stop(); dlg.dispose(); });
+        dlg.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosing(java.awt.event.WindowEvent ev) {
+                countdown.stop();
+            }
+        });
+
+        dlg.setVisible(true);
+    }
 
     /**
 		* 배경 이미지 모드에서 같은 폴더의 이전(delta=-1)/다음(delta=+1) 이미지로 교체.
