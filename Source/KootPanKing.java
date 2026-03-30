@@ -96,22 +96,7 @@ public class KootPanKing extends JFrame {
                 }
             } catch (Exception ignored) {}
         }
-        // ③ ProcessHandle 보완 — 최후 수단 (javaw.exe 제외)
-        if (EXE_PATH.isEmpty()) {
-            try {
-                java.util.Optional<String> cmd = ProcessHandle.current().info().command();
-                if (cmd.isPresent()) {
-                    File f = new File(cmd.get());
-                    String name = f.getName().toLowerCase();
-                    if (f.exists()
-                        && !name.equals("java.exe") && !name.equals("javaw.exe")
-                        && !name.equals("java")     && !name.equals("javaw")) {
-                        EXE_PATH = f.getAbsolutePath();
-                        System.out.println("[AppDir] ProcessHandle 감지: " + EXE_PATH);
-                    }
-                }
-            } catch (Exception ignored) {}
-        }
+        // ③ ProcessHandle (Java 9+) - Java 8 비호환으로 생략
 
         // ── 데이터 폴더는 항상 %APPDATA%\KootPanKing\ 고정 ──
         // 실행파일(exe/jar) 위치와 무관하게 데이터는 APPDATA 에만 저장
@@ -1749,12 +1734,22 @@ public class KootPanKing extends JFrame {
                             Process capProc = capPb.start();
                             // stderr 버림
                             new Thread(() -> {
-                                try { capProc.getErrorStream().transferTo(java.io.OutputStream.nullOutputStream()); }
-                                catch (Exception ignored) {}
-							}, "YT-cap-stderr").start();
+                                try {
+                                    java.io.InputStream es = capProc.getErrorStream();
+                                    byte[] buf = new byte[4096];
+                                    while (es.read(buf) != -1) {}
+                                } catch (Exception ignored) {}
+                            }, "YT-cap-stderr").start();
 
                             // stdout → jpg 바이트 읽기 → BufferedImage
-                            byte[] jpgBytes = capProc.getInputStream().readAllBytes();
+                            byte[] jpgBytes;
+                            {
+                                java.io.InputStream is = capProc.getInputStream();
+                                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                                byte[] buf = new byte[4096]; int n;
+                                while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
+                                jpgBytes = baos.toByteArray();
+                            }
                             capProc.waitFor();
 
                             if (jpgBytes.length > 0) {
@@ -2933,9 +2928,9 @@ public class KootPanKing extends JFrame {
 			System.out.println("[ " + thisProgramName + " ] [main] bye bye");
 			AppLogger.writeToFile("[ " + thisProgramName + " ] [main] 바이바이");
 			} catch (Exception e) {			e.printStackTrace();
-			try {	java.nio.file.Files.writeString(
-				java.nio.file.Paths.get("error.log"),
-			e.toString()				);
+			try {
+				java.io.PrintWriter pw = new java.io.PrintWriter("error.log", "UTF-8");
+				pw.print(e.toString()); pw.close();
 			} catch (Exception ignored) {}
 		}
 	}  //     main(String[] args)
